@@ -70,13 +70,14 @@ export default function App() {
     }, 5000);
   }
 
-  async function handleSubmit() {
-    if (!input.trim()) return;
+  async function handleSubmit(override) {
+    const query = (typeof override === "string" ? override : input).trim();
+    if (!query) return;
     resetState();
     setLoading(true);
 
     try {
-      const res = await submitQuery(input.trim());
+      const res = await submitQuery(query);
 
       if (res.mode === "qa") {
         setMode("qa");
