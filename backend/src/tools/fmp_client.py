@@ -22,7 +22,7 @@ _key_locks_lock = threading.Lock()
 # Global rate limiter: minimum seconds between FMP API calls
 _last_call_time = 0.0
 _rate_lock = threading.Lock()
-MIN_CALL_INTERVAL = 1.2  # ~50 calls/min (free tier is ~5/min but we retry)
+MIN_CALL_INTERVAL = 4.0  # ~15 calls/min; free tier is ~5/min but retries handle 429s
 
 
 def _get_key_lock(cache_key: str) -> threading.Lock:

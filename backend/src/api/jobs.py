@@ -191,9 +191,10 @@ def _run_analysis(job: Job, query: Optional[str], rag_level: str):
         # Pre-warm FMP/yfinance cache so all agents read from cache
         job.push_event({
             "event": "phase",
-            "data": {"phase": "warming_cache", "message": "Loading financial data..."},
+            "data": {"phase": "warming_cache", "message": "Loading financial data (fetching market data for all agents)..."},
         })
         warm_cache(job.ticker)
+        logger.info(f"Cache warm complete for {job.ticker}, starting agent graph")
 
         graph = build_analysis_graph()
 

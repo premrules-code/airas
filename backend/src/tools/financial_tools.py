@@ -1150,19 +1150,21 @@ def _yfinance_get_news_sentiment(ticker: str) -> Dict:
 
 
 def warm_cache(ticker: str):
-    """Best-effort pre-fetch of common FMP and yfinance data for a ticker.
+    """Pre-fetch FMP and yfinance data for a ticker before agents run.
 
-    Each call tries once (no retries on rate limit) — whatever succeeds
-    goes into cache. Agents will fetch anything that was missed, with
-    per-key lock dedup preventing concurrent duplicate requests.
+    Uses normal retries (with backoff on 429) so that data is actually
+    cached. Once populated, all 10 agents read from cache with zero
+    live API calls. Params must match what tools actually request so
+    cache keys align.
     """
     logger.info(f"Pre-warming cache for {ticker}...")
+    # Params must match the exact calls each tool makes (same cache key)
     calls = [
         ("quote", "quote", {"symbol": ticker}),
         ("ratios", "ratios", {"symbol": ticker, "period": "annual", "limit": 1}),
         ("key-metrics", "key-metrics", {"symbol": ticker, "period": "annual", "limit": 1}),
         ("historical-prices", "historical-price-eod/light", {"symbol": ticker}),
-        ("insider-trades", "insider-trading/latest", {"symbol": ticker, "limit": 20}),
+        ("insider-trades", "insider-trading/latest", {"symbol": ticker, "limit": 50}),
         ("price-target", "price-target-summary", {"symbol": ticker}),
         ("grades", "grades", {"symbol": ticker, "limit": 10}),
         ("news", "news/stock", {"symbols": ticker, "limit": 10}),
@@ -1170,16 +1172,18 @@ def warm_cache(ticker: str):
     cached = 0
     for name, path, params in calls:
         try:
-            result = fmp_client._fmp_get(path, params, _warm=True)
+            result = fmp_client._fmp_get(path, params)  # normal retries on 429
             if result is not None:
                 cached += 1
                 logger.info(f"  Cached {name} for {ticker}")
+            else:
+                logger.warning(f"  Failed to cache {name} for {ticker}")
         except Exception as e:
-            logger.debug(f"  Warm skip {name}/{ticker}: {e}")
+            logger.warning(f"  Warm error {name}/{ticker}: {e}")
 
-    # Also warm yfinance info (used as fallback)
+    # Also warm yfinance info (used as fallback by many tools)
     try:
-        _get_info_with_retry(ticker, max_retries=1)
+        _get_info_with_retry(ticker, max_retries=2)
         cached += 1
         logger.info(f"  Cached yfinance info for {ticker}")
     except Exception:
