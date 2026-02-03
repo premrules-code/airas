@@ -70,11 +70,33 @@ def get_stock_price(ticker: str, date: Optional[str] = None) -> Dict:
     """Get current or historical stock price."""
     logger.info(f"Getting price for {ticker}")
 
-    # Historical date requests always use yfinance (FMP historical needs different handling)
+    # Historical date requests always use yfinance
     if date:
         return _yfinance_get_stock_price(ticker, date)
 
-    # Try FMP first for current price
+    # Try Finnhub first (60 calls/min)
+    fh_quote = finnhub_client.get_quote(ticker)
+    if fh_quote:
+        # Finnhub quote: c=current, h=high, l=low, o=open, pc=prev_close
+        # Get extra fields from basic financials if cached
+        fh_metrics = finnhub_client.get_basic_financials(ticker)
+        metric = fh_metrics.get("metric", {}) if fh_metrics else {}
+        return {
+            "ticker": ticker,
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "current_price": fh_quote.get("c"),
+            "open": fh_quote.get("o"),
+            "high": fh_quote.get("h"),
+            "low": fh_quote.get("l"),
+            "volume": None,  # not in Finnhub quote
+            "market_cap": metric.get("marketCapitalization"),
+            "pe_ratio": metric.get("peTTM"),
+            "52_week_high": metric.get("52WeekHigh"),
+            "52_week_low": metric.get("52WeekLow"),
+            "source": "finnhub",
+        }
+
+    # Try FMP
     quote = fmp_client.get_quote(ticker)
     if quote:
         return {
@@ -158,15 +180,72 @@ def _interpret_ratio(ratio_type: str, value: Optional[float]) -> str:
     return "N/A"
 
 
+def _finnhub_get_ratio(ratio_type: str, ticker: str) -> Optional[float]:
+    """Extract a specific ratio from Finnhub basic financials."""
+    data = finnhub_client.get_basic_financials(ticker)
+    if not data:
+        return None
+    metric = data.get("metric", {})
+
+    mapping = {
+        "pe_ratio": "peTTM",
+        "roe": "roeTTM",
+        "debt_to_equity": "totalDebt/totalEquityQuarterly",
+        "profit_margin": "netProfitMarginTTM",
+        "current_ratio": "currentRatioQuarterly",
+    }
+
+    field = mapping.get(ratio_type)
+    if not field:
+        return None
+
+    raw = metric.get(field)
+    if raw is None:
+        # Try alternate field names
+        alt_fields = {
+            "roe": ["roeRfy", "roeTTM"],
+            "debt_to_equity": ["totalDebt/totalEquityAnnual", "longTermDebt/equityQuarterly"],
+            "profit_margin": ["netProfitMarginAnnual", "netProfitMarginTTM"],
+            "current_ratio": ["currentRatioAnnual"],
+        }
+        for alt in alt_fields.get(ratio_type, []):
+            raw = metric.get(alt)
+            if raw is not None:
+                break
+
+    if raw is None:
+        return None
+
+    # Finnhub returns ROE/margins as decimals in some fields, percentages in others
+    val = float(raw)
+    if ratio_type in ("roe", "profit_margin") and abs(val) < 1:
+        val = val * 100
+    return round(val, 2)
+
+
 def calculate_financial_ratio(
     ratio_type: str,
     ticker: str,
     period: str = "FY2023"
 ) -> Dict:
-    """Calculate financial ratios using FMP or yfinance."""
+    """Calculate financial ratios using Finnhub, FMP, or yfinance."""
     logger.info(f"Calculating {ratio_type} for {ticker}")
 
-    # Try FMP first
+    # Try Finnhub first (60 calls/min)
+    value = _finnhub_get_ratio(ratio_type, ticker)
+    if value is not None:
+        interpretation = _interpret_ratio(ratio_type, value)
+        result = RatioResult(
+            ratio_name=ratio_type,
+            ticker=ticker,
+            value=value,
+            components={"period": period, "source": "finnhub"},
+            interpretation=interpretation,
+        )
+        logger.info(f"  Result (Finnhub): {value} ({interpretation})")
+        return result.model_dump()
+
+    # Try FMP
     value = _fmp_get_ratio(ratio_type, ticker)
     if value is not None:
         interpretation = _interpret_ratio(ratio_type, value)
@@ -274,7 +353,9 @@ def compare_companies(
     try:
         results = []
         for ticker in tickers:
-            value = _get_comparison_value_fmp(ticker, metric)
+            value = _get_comparison_value_finnhub(ticker, metric)
+            if value is None:
+                value = _get_comparison_value_fmp(ticker, metric)
             if value is None:
                 value = _get_comparison_value_yfinance(ticker, metric)
             results.append({'ticker': ticker, 'value': round(value or 0, 2)})
@@ -292,6 +373,37 @@ def compare_companies(
     except Exception as e:
         logger.error(f"  Error: {e}")
         return {"metric": metric, "companies": tickers, "values": [], "winner": "Error", "analysis": str(e)}
+
+
+def _get_comparison_value_finnhub(ticker: str, metric: str) -> Optional[float]:
+    """Get a comparison metric value from Finnhub."""
+    data = finnhub_client.get_basic_financials(ticker)
+    if not data:
+        return None
+    m = data.get("metric", {})
+
+    if metric == "market_cap":
+        mc = m.get("marketCapitalization")
+        return mc if mc else None  # already in billions
+    elif metric == "pe_ratio":
+        return m.get("peTTM")
+    elif metric == "revenue":
+        rev = m.get("revenuePerShareTTM")
+        shares = m.get("shareOutstanding")  # in millions
+        if rev and shares:
+            return round(rev * shares / 1000, 2)  # billions
+        return None
+    elif metric == "profit_margin":
+        margin = m.get("netProfitMarginTTM")
+        if margin is not None:
+            return round(float(margin) * 100, 2) if abs(margin) < 1 else round(float(margin), 2)
+        return None
+    elif metric == "roe":
+        roe = m.get("roeTTM")
+        if roe is not None:
+            return round(float(roe) * 100, 2) if abs(roe) < 1 else round(float(roe), 2)
+        return None
+    return None
 
 
 def _get_comparison_value_fmp(ticker: str, metric: str) -> Optional[float]:
@@ -395,11 +507,82 @@ def _calculate_bollinger(close_prices, period: int = 20) -> Dict:
 # ============================================================================
 
 
+def _finnhub_get_technical_indicators(ticker: str) -> Optional[Dict]:
+    """Calculate technical indicators from Finnhub historical candles using ta library."""
+    import pandas as pd
+
+    candles = finnhub_client.get_candles(ticker)
+    if not candles or not candles.get("c") or len(candles["c"]) < 26:
+        return None
+
+    close = pd.Series(candles["c"], name="Close")
+    current_price = float(close.iloc[-1])
+
+    try:
+        from ta.trend import SMAIndicator, MACD as TAmacd
+        from ta.momentum import RSIIndicator
+        from ta.volatility import BollingerBands
+
+        sma_20_val = round(float(SMAIndicator(close, window=20).sma_indicator().iloc[-1]), 2) if len(close) >= 20 else None
+        sma_50_val = round(float(SMAIndicator(close, window=50).sma_indicator().iloc[-1]), 2) if len(close) >= 50 else None
+        sma_200_val = round(float(SMAIndicator(close, window=200).sma_indicator().iloc[-1]), 2) if len(close) >= 200 else None
+
+        rsi_val = round(float(RSIIndicator(close, window=14).rsi().iloc[-1]), 2)
+
+        macd_ind = TAmacd(close)
+        macd = {
+            "macd": round(float(macd_ind.macd().iloc[-1]), 4),
+            "signal": round(float(macd_ind.macd_signal().iloc[-1]), 4),
+            "histogram": round(float(macd_ind.macd_diff().iloc[-1]), 4),
+        }
+
+        bb_ind = BollingerBands(close, window=20)
+        bollinger = {
+            "upper": round(float(bb_ind.bollinger_hband().iloc[-1]), 2),
+            "middle": round(float(bb_ind.bollinger_mavg().iloc[-1]), 2),
+            "lower": round(float(bb_ind.bollinger_lband().iloc[-1]), 2),
+        }
+    except ImportError:
+        sma_20_val = round(float(close.rolling(20).mean().iloc[-1]), 2) if len(close) >= 20 else None
+        sma_50_val = round(float(close.rolling(50).mean().iloc[-1]), 2) if len(close) >= 50 else None
+        sma_200_val = round(float(close.rolling(200).mean().iloc[-1]), 2) if len(close) >= 200 else None
+        rsi_val = _calculate_rsi(close, 14)
+        macd = _calculate_macd(close)
+        bollinger = _calculate_bollinger(close)
+
+    price_1m = round(float((close.iloc[-1] / close.iloc[-21] - 1) * 100), 2) if len(close) >= 21 else None
+    price_3m = round(float((close.iloc[-1] / close.iloc[-63] - 1) * 100), 2) if len(close) >= 63 else None
+
+    volumes = candles.get("v", [])
+    vol_avg = int(sum(volumes[-20:]) / max(len(volumes[-20:]), 1)) if volumes else 0
+
+    return {
+        "ticker": ticker,
+        "current_price": round(current_price, 2),
+        "sma_20": sma_20_val,
+        "sma_50": sma_50_val,
+        "sma_200": sma_200_val,
+        "rsi_14": rsi_val,
+        "macd": macd,
+        "bollinger_bands": bollinger,
+        "price_change_1m": price_1m,
+        "price_change_3m": price_3m,
+        "volume_avg_20d": vol_avg,
+        "trend": "bullish" if current_price > (sma_50_val or current_price) else "bearish",
+        "source": "finnhub+ta",
+    }
+
+
 def get_technical_indicators(ticker: str, period: str = "6mo") -> Dict:
-    """Calculate technical indicators from FMP or price history."""
+    """Calculate technical indicators from Finnhub, FMP, or yfinance price history."""
     logger.info(f"Getting technical indicators for {ticker}")
 
-    # Try FMP first
+    # Try Finnhub candles first (60 calls/min)
+    result = _finnhub_get_technical_indicators(ticker)
+    if result:
+        return result
+
+    # Try FMP
     result = _fmp_get_technical_indicators(ticker)
     if result:
         return result
@@ -549,13 +732,13 @@ def get_insider_trades(ticker: str) -> Dict:
     """Get recent insider trading activity."""
     logger.info(f"Getting insider trades for {ticker}")
 
-    # Try FMP first
-    result = _fmp_get_insider_trades(ticker)
+    # Try Finnhub first (60 calls/min)
+    result = _finnhub_get_insider_trades(ticker)
     if result:
         return result
 
-    # Try Finnhub
-    result = _finnhub_get_insider_trades(ticker)
+    # Try FMP
+    result = _fmp_get_insider_trades(ticker)
     if result:
         return result
 
@@ -832,11 +1015,90 @@ def _get_recommendation_trend(stock) -> List[Dict]:
         return []
 
 
+def _finnhub_get_analyst_ratings(ticker: str) -> Optional[Dict]:
+    """Get analyst ratings from Finnhub recommendation trends + price target."""
+    recs = finnhub_client.get_recommendation_trends(ticker)
+    pt = finnhub_client.get_price_target(ticker)
+    if not recs and not pt:
+        return None
+
+    # Price target data
+    target_mean = pt.get("targetMean") if pt else None
+    target_high = pt.get("targetHigh") if pt else None
+    target_low = pt.get("targetLow") if pt else None
+    target_median = pt.get("targetMedian") if pt else None
+
+    # Get current price for upside calc
+    current_price = None
+    fh_quote = finnhub_client.get_quote(ticker)
+    if fh_quote:
+        current_price = fh_quote.get("c")
+
+    upside = None
+    if target_mean and current_price:
+        upside = round(((target_mean / max(current_price, 1)) - 1) * 100, 2)
+
+    # Recommendation consensus from most recent month
+    rec_key = "none"
+    num_analysts = 0
+    recommendation_trend = []
+    if recs:
+        latest = recs[0]
+        sb = latest.get("strongBuy", 0)
+        b = latest.get("buy", 0)
+        h = latest.get("hold", 0)
+        s = latest.get("sell", 0)
+        ss = latest.get("strongSell", 0)
+        num_analysts = sb + b + h + s + ss
+
+        if num_analysts > 0:
+            score = (sb * 5 + b * 4 + h * 3 + s * 2 + ss * 1) / num_analysts
+            if score >= 4.0:
+                rec_key = "strong_buy"
+            elif score >= 3.5:
+                rec_key = "buy"
+            elif score >= 2.5:
+                rec_key = "hold"
+            elif score >= 1.5:
+                rec_key = "sell"
+            else:
+                rec_key = "strong_sell"
+
+        for r in recs[:4]:
+            recommendation_trend.append({
+                "period": r.get("period", ""),
+                "strongBuy": r.get("strongBuy", 0),
+                "buy": r.get("buy", 0),
+                "hold": r.get("hold", 0),
+                "sell": r.get("sell", 0),
+                "strongSell": r.get("strongSell", 0),
+            })
+
+    return {
+        "ticker": ticker,
+        "recommendation": rec_key,
+        "num_analysts": num_analysts,
+        "target_price_mean": target_mean,
+        "target_price_high": target_high,
+        "target_price_low": target_low,
+        "target_price_median": target_median,
+        "current_price": current_price,
+        "upside_pct": upside,
+        "recommendation_trend": recommendation_trend,
+        "source": "finnhub",
+    }
+
+
 def get_analyst_ratings(ticker: str) -> Dict:
     """Get analyst consensus and price targets."""
     logger.info(f"Getting analyst ratings for {ticker}")
 
-    # Try FMP first
+    # Try Finnhub first (60 calls/min)
+    result = _finnhub_get_analyst_ratings(ticker)
+    if result:
+        return result
+
+    # Try FMP
     result = _fmp_get_analyst_ratings(ticker)
     if result:
         return result
@@ -1035,10 +1297,10 @@ def get_social_sentiment(ticker: str) -> Dict:
     except Exception as e:
         results["sources"]["reddit"] = {"error": str(e)}
 
-    # Source 3: News — try FMP → Finnhub → yfinance
-    news_result = _fmp_get_news_sentiment(ticker)
+    # Source 3: News — try Finnhub → FMP → yfinance
+    news_result = _finnhub_get_news_sentiment(ticker)
     if not news_result:
-        news_result = _finnhub_get_news_sentiment(ticker)
+        news_result = _fmp_get_news_sentiment(ticker)
     if not news_result:
         news_result = _yfinance_get_news_sentiment(ticker)
     results["sources"]["news"] = news_result
@@ -1150,46 +1412,67 @@ def _yfinance_get_news_sentiment(ticker: str) -> Dict:
 
 
 def warm_cache(ticker: str):
-    """Pre-fetch FMP and yfinance data for a ticker before agents run.
+    """Pre-fetch financial data for a ticker before agents run.
 
-    Uses normal retries (with backoff on 429) so that data is actually
-    cached. Once populated, all 10 agents read from cache with zero
-    live API calls. Params must match what tools actually request so
-    cache keys align.
+    Finnhub is primary (60 calls/min) — 9 endpoints cached in ~10s.
+    FMP is secondary fallback (5 calls/min) — only called if Finnhub
+    misses. Once populated, all 10 agents read from cache instantly.
     """
     logger.info(f"Pre-warming cache for {ticker}...")
-    # Params must match the exact calls each tool makes (same cache key)
-    calls = [
-        ("quote", "quote", {"symbol": ticker}),
-        ("ratios", "ratios", {"symbol": ticker, "period": "annual", "limit": 1}),
-        ("key-metrics", "key-metrics", {"symbol": ticker, "period": "annual", "limit": 1}),
-        ("historical-prices", "historical-price-eod/light", {"symbol": ticker}),
-        ("insider-trades", "insider-trading/latest", {"symbol": ticker, "limit": 50}),
-        ("price-target", "price-target-summary", {"symbol": ticker}),
-        ("grades", "grades", {"symbol": ticker, "limit": 10}),
-        ("news", "news/stock", {"symbols": ticker, "limit": 10}),
-    ]
     cached = 0
-    for name, path, params in calls:
+    total = 0
+
+    # --- Finnhub endpoints (fast: 60 calls/min) ---
+    finnhub_calls = [
+        ("finnhub:quote", lambda: finnhub_client.get_quote(ticker)),
+        ("finnhub:basic_financials", lambda: finnhub_client.get_basic_financials(ticker)),
+        ("finnhub:candles", lambda: finnhub_client.get_candles(ticker)),
+        ("finnhub:insider_txns", lambda: finnhub_client.get_insider_transactions(ticker)),
+        ("finnhub:news", lambda: finnhub_client.get_company_news(ticker)),
+        ("finnhub:recommendations", lambda: finnhub_client.get_recommendation_trends(ticker)),
+        ("finnhub:price_target", lambda: finnhub_client.get_price_target(ticker)),
+        ("finnhub:earnings", lambda: finnhub_client.get_earnings(ticker)),
+        ("finnhub:peers", lambda: finnhub_client.get_peers(ticker)),
+    ]
+    for name, call_fn in finnhub_calls:
+        total += 1
         try:
-            result = fmp_client._fmp_get(path, params)  # normal retries on 429
+            result = call_fn()
             if result is not None:
                 cached += 1
-                logger.info(f"  Cached {name} for {ticker}")
+                logger.info(f"  Cached {name}")
             else:
-                logger.warning(f"  Failed to cache {name} for {ticker}")
+                logger.info(f"  No data {name}")
         except Exception as e:
-            logger.warning(f"  Warm error {name}/{ticker}: {e}")
+            logger.warning(f"  Error {name}: {e}")
 
-    # Also warm yfinance info (used as fallback by many tools)
+    # --- FMP endpoints (slow: 5 calls/min) — fill gaps ---
+    # Only call FMP for data Finnhub doesn't cover well
+    fmp_calls = [
+        ("fmp:ratios", "ratios", {"symbol": ticker, "period": "annual", "limit": 1}),
+        ("fmp:historical", "historical-price-eod/light", {"symbol": ticker}),
+        ("fmp:insider", "insider-trading/latest", {"symbol": ticker, "limit": 50}),
+    ]
+    for name, path, params in fmp_calls:
+        total += 1
+        try:
+            result = fmp_client._fmp_get(path, params, _warm=True)
+            if result is not None:
+                cached += 1
+                logger.info(f"  Cached {name}")
+        except Exception:
+            pass
+
+    # --- yfinance info (fallback for many tools) ---
+    total += 1
     try:
-        _get_info_with_retry(ticker, max_retries=2)
+        _get_info_with_retry(ticker, max_retries=1)
         cached += 1
-        logger.info(f"  Cached yfinance info for {ticker}")
+        logger.info(f"  Cached yfinance info")
     except Exception:
         pass
 
-    logger.info(f"Cache pre-warm done for {ticker}: {cached}/{len(calls)+1} endpoints cached")
+    logger.info(f"Cache pre-warm done for {ticker}: {cached}/{total} endpoints cached")
 
 
 # ============================================================================
