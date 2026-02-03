@@ -38,11 +38,23 @@ export function getAnalysis(jobId) {
 /** SSE stream for analysis progress with auto-reconnect */
 export function streamAnalysis(jobId, onEvent) {
   let retries = 0;
-  const MAX_RETRIES = 5;
+  const MAX_RETRIES = 3;
   let done = false;
   let source = null;
 
-  function connect() {
+  async function connect() {
+    // Pre-check: verify job still exists before opening SSE
+    // (EventSource can't distinguish 404 from network error)
+    try {
+      const check = await fetch(`${BASE}/analysis/${jobId}`);
+      if (check.status === 404) {
+        onEvent({ type: "error", data: { message: "Analysis job expired. Please start a new query." } });
+        return;
+      }
+    } catch {
+      // Network error — still try SSE, polling fallback will handle it
+    }
+
     source = new EventSource(`${BASE}/analysis/${jobId}/stream`);
 
     source.addEventListener("phase", (e) => {
@@ -67,9 +79,9 @@ export function streamAnalysis(jobId, onEvent) {
 
       retries++;
       if (retries <= MAX_RETRIES) {
-        // Reconnect after a short delay (polling fallback also running)
         setTimeout(connect, 2000 * retries);
       } else {
+        // Stop retrying — polling fallback is already running
         onEvent({ type: "error", data: { message: "Stream connection lost — using polling fallback" } });
       }
     });
@@ -77,7 +89,6 @@ export function streamAnalysis(jobId, onEvent) {
 
   connect();
 
-  // Return an object with close() so the caller can stop all reconnections
   return {
     close() {
       done = true;

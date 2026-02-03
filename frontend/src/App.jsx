@@ -66,13 +66,17 @@ export default function App() {
             setError(result.errors.join("; "));
           }
         }
-      } catch {
+      } catch (e) {
         failures++;
-        if (failures >= 5) {
+        // Stop quickly on 404 (stale job after redeployment) or after 3 failures
+        const is404 = e?.message?.includes("404") || e?.message?.includes("Not Found");
+        if (is404 || failures >= 3) {
           clearInterval(pollRef.current);
           pollRef.current = null;
           setLoading(false);
-          setError("Lost connection to analysis job. Please try again.");
+          setError(is404
+            ? "Analysis job expired (server restarted). Please start a new query."
+            : "Lost connection to analysis job. Please try again.");
         }
       }
     }, 5000);
