@@ -35,31 +35,55 @@ export function getAnalysis(jobId) {
   return request(`/analysis/${jobId}`);
 }
 
-/** SSE stream for analysis progress */
+/** SSE stream for analysis progress with auto-reconnect */
 export function streamAnalysis(jobId, onEvent) {
-  const source = new EventSource(`${BASE}/analysis/${jobId}/stream`);
+  let retries = 0;
+  const MAX_RETRIES = 5;
+  let done = false;
+  let source = null;
 
-  source.addEventListener("phase", (e) => {
-    onEvent({ type: "phase", data: JSON.parse(e.data) });
-  });
+  function connect() {
+    source = new EventSource(`${BASE}/analysis/${jobId}/stream`);
 
-  source.addEventListener("agent_completed", (e) => {
-    onEvent({ type: "agent_completed", data: JSON.parse(e.data) });
-  });
+    source.addEventListener("phase", (e) => {
+      retries = 0;
+      onEvent({ type: "phase", data: JSON.parse(e.data) });
+    });
 
-  source.addEventListener("done", (e) => {
-    onEvent({ type: "done", data: JSON.parse(e.data) });
-    source.close();
-  });
+    source.addEventListener("agent_completed", (e) => {
+      retries = 0;
+      onEvent({ type: "agent_completed", data: JSON.parse(e.data) });
+    });
 
-  source.addEventListener("error", (e) => {
-    // SSE "error" may just be the connection closing
-    if (source.readyState === EventSource.CLOSED) return;
-    onEvent({ type: "error", data: { message: "Stream connection lost" } });
-    source.close();
-  });
+    source.addEventListener("done", (e) => {
+      done = true;
+      onEvent({ type: "done", data: JSON.parse(e.data) });
+      source.close();
+    });
 
-  return source; // caller can close early if needed
+    source.addEventListener("error", () => {
+      if (done) return;
+      source.close();
+
+      retries++;
+      if (retries <= MAX_RETRIES) {
+        // Reconnect after a short delay (polling fallback also running)
+        setTimeout(connect, 2000 * retries);
+      } else {
+        onEvent({ type: "error", data: { message: "Stream connection lost — using polling fallback" } });
+      }
+    });
+  }
+
+  connect();
+
+  // Return an object with close() so the caller can stop all reconnections
+  return {
+    close() {
+      done = true;
+      if (source) source.close();
+    },
+  };
 }
 
 /** Get indexed companies */

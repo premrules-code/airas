@@ -47,6 +47,7 @@ async def stream_analysis(job_id: str):
 
     async def event_generator():
         cursor = 0
+        heartbeat_counter = 0
         while True:
             new_events = job.snapshot_events(after=cursor)
             for evt in new_events:
@@ -54,6 +55,7 @@ async def stream_analysis(job_id: str):
                 data = json.dumps(evt.get("data", evt))
                 yield f"event: {event_type}\ndata: {data}\n\n"
                 cursor += 1
+                heartbeat_counter = 0
 
                 if event_type in ("done", "error"):
                     return
@@ -61,6 +63,12 @@ async def stream_analysis(job_id: str):
             if job.status in ("done", "error") and not new_events:
                 yield f"event: done\ndata: {{}}\n\n"
                 return
+
+            # Send heartbeat comment every ~15 seconds to keep connection alive
+            heartbeat_counter += 1
+            if heartbeat_counter >= 15:
+                yield ": heartbeat\n\n"
+                heartbeat_counter = 0
 
             await asyncio.sleep(1)
 
