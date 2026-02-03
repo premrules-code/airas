@@ -1,0 +1,55 @@
+# ============================================================================
+# AIRAS V3 - Production Dependencies (used in Docker)
+# ============================================================================
+
+# Core Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic>=2.5.3
+pydantic-settings>=2.1.0
+
+# LLM & Embeddings
+anthropic>=0.45.0
+openai>=1.12.0
+
+# RAG Framework (LlamaIndex with Supabase)
+llama-index==0.10.12
+llama-index-vector-stores-postgres==0.1.6
+llama-index-embeddings-openai==0.1.6
+llama-index-llms-openai==0.1.6
+
+# Database (Supabase + pgvector)
+psycopg2-binary==2.9.9
+pgvector==0.2.4
+supabase==2.3.4
+sqlalchemy==2.0.25
+
+# SEC Data Download
+sec-edgar-downloader
+beautifulsoup4==4.12.3
+lxml==5.1.0
+
+# Financial Data
+yfinance==0.2.36
+ta>=0.11.0
+finnhub-python>=2.4.19
+
+# Monitoring & Tracing
+langfuse>=2.50.0
+
+# Agent Orchestration
+langgraph>=0.2.0
+langchain-core>=0.3.0
+
+# Social Sentiment
+praw>=7.7.0
+nltk>=3.8.0
+
+# Utilities
+python-dotenv==1.0.0
+tenacity==8.2.3
+requests==2.31.0
+
+# Data Processing
+pandas==2.1.4
+numpy==1.26.3

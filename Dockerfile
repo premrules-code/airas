@@ -18,8 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install Python deps first (Docker layer caching)
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Use prod requirements (excludes test deps like ragas/pytest)
+COPY backend/requirements-prod.txt .
+RUN pip install --no-cache-dir -r requirements-prod.txt
 
 # Copy backend source
 COPY backend/ .
