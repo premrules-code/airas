@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 _ticker_cache: Dict[str, yf.Ticker] = {}
 _info_cache: Dict[str, Dict] = {}
 _info_cache_time: Dict[str, float] = {}
-INFO_CACHE_TTL = 300  # 5 minutes
+INFO_CACHE_TTL = 1800  # 30 minutes (data doesn't change during an analysis)
 
 
 def _get_ticker(symbol: str) -> yf.Ticker:
@@ -1142,6 +1142,45 @@ def _yfinance_get_news_sentiment(ticker: str) -> Dict:
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+# ============================================================================
+# Cache pre-warming — call once before agents start so they all read from cache
+# ============================================================================
+
+
+def warm_cache(ticker: str):
+    """Pre-fetch common FMP and yfinance data for a ticker.
+
+    Called before agents run so the in-memory cache is populated.
+    All 10 agents then read from cache instead of hitting APIs concurrently.
+    """
+    logger.info(f"Pre-warming cache for {ticker}...")
+    calls = [
+        ("quote", lambda: fmp_client.get_quote(ticker)),
+        ("ratios", lambda: fmp_client.get_ratios(ticker)),
+        ("key-metrics", lambda: fmp_client.get_key_metrics(ticker)),
+        ("historical-prices", lambda: fmp_client.get_historical_prices(ticker)),
+        ("insider-trades", lambda: fmp_client.get_insider_trades_fmp(ticker)),
+        ("price-target", lambda: fmp_client.get_price_target_summary(ticker)),
+        ("grades", lambda: fmp_client.get_stock_grades(ticker)),
+        ("news", lambda: fmp_client.get_stock_news(ticker)),
+    ]
+    for name, fn in calls:
+        try:
+            fn()
+            logger.info(f"  Cached {name} for {ticker}")
+        except Exception as e:
+            logger.warning(f"  Cache warm failed for {name}/{ticker}: {e}")
+
+    # Also warm yfinance info (used as fallback)
+    try:
+        _get_info_with_retry(ticker, max_retries=2)
+        logger.info(f"  Cached yfinance info for {ticker}")
+    except Exception as e:
+        logger.warning(f"  yfinance warm failed for {ticker}: {e}")
+
+    logger.info(f"Cache pre-warm complete for {ticker}")
 
 
 # ============================================================================

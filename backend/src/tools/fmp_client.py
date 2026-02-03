@@ -1,6 +1,7 @@
 """Financial Modeling Prep API client with caching and retry."""
 
 import logging
+import threading
 import time
 import requests
 from typing import Dict, Optional, List
@@ -10,13 +11,41 @@ logger = logging.getLogger(__name__)
 
 FMP_BASE_URL = "https://financialmodelingprep.com/stable"
 
-# Response cache (5-min TTL)
+# Response cache (30-min TTL — data doesn't change during an analysis run)
 _cache: Dict[str, tuple] = {}  # cache_key -> (timestamp, data)
-CACHE_TTL = 300
+CACHE_TTL = 1800
+
+# Per-key locks: prevents 10 agents from all hitting the same endpoint
+_key_locks: Dict[str, threading.Lock] = {}
+_key_locks_lock = threading.Lock()
+
+# Global rate limiter: minimum seconds between FMP API calls
+_last_call_time = 0.0
+_rate_lock = threading.Lock()
+MIN_CALL_INTERVAL = 1.2  # ~50 calls/min (free tier is ~5/min but we retry)
+
+
+def _get_key_lock(cache_key: str) -> threading.Lock:
+    """Get or create a per-key lock for deduplicating concurrent requests."""
+    with _key_locks_lock:
+        if cache_key not in _key_locks:
+            _key_locks[cache_key] = threading.Lock()
+        return _key_locks[cache_key]
+
+
+def _rate_limit_wait():
+    """Enforce minimum interval between API calls to avoid rate limit storms."""
+    global _last_call_time
+    with _rate_lock:
+        now = time.time()
+        elapsed = now - _last_call_time
+        if elapsed < MIN_CALL_INTERVAL:
+            time.sleep(MIN_CALL_INTERVAL - elapsed)
+        _last_call_time = time.time()
 
 
 def _fmp_get(path: str, params: dict = None, max_retries: int = 2) -> Optional[dict | list]:
-    """Make authenticated FMP API GET request with caching and retry."""
+    """Make authenticated FMP API GET request with caching, dedup, and retry."""
     settings = get_settings()
     if not settings.fmp_api_key:
         return None
@@ -28,32 +57,43 @@ def _fmp_get(path: str, params: dict = None, max_retries: int = 2) -> Optional[d
     url = f"{FMP_BASE_URL}/{path}"
     cache_key = f"{url}?{'&'.join(f'{k}={v}' for k, v in sorted(params.items()) if k != 'apikey')}"
 
-    # Check cache
+    # Fast path: check cache without locking
     now = time.time()
     if cache_key in _cache:
         cached_time, cached_data = _cache[cache_key]
         if now - cached_time < CACHE_TTL:
             return cached_data
 
-    # Make request with retry
-    for attempt in range(max_retries + 1):
-        try:
-            resp = requests.get(url, params=params, timeout=15)
-            if resp.status_code == 200:
-                data = resp.json()
-                _cache[cache_key] = (now, data)
-                return data
-            elif resp.status_code == 429:
-                delay = 5 * (2 ** attempt)
-                logger.warning(f"FMP rate limited, retrying in {delay}s")
-                time.sleep(delay)
-            else:
-                logger.warning(f"FMP {resp.status_code} for {path}: {resp.text[:200]}")
-                return None
-        except Exception as e:
-            logger.warning(f"FMP request error for {path}: {e}")
-            if attempt < max_retries:
-                time.sleep(2)
+    # Per-key lock: if another thread is already fetching this, wait for it
+    key_lock = _get_key_lock(cache_key)
+    with key_lock:
+        # Re-check cache (another thread may have populated it while we waited)
+        now = time.time()
+        if cache_key in _cache:
+            cached_time, cached_data = _cache[cache_key]
+            if now - cached_time < CACHE_TTL:
+                return cached_data
+
+        # Make request with retry + global rate limiting
+        for attempt in range(max_retries + 1):
+            try:
+                _rate_limit_wait()
+                resp = requests.get(url, params=params, timeout=15)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    _cache[cache_key] = (time.time(), data)
+                    return data
+                elif resp.status_code == 429:
+                    delay = 5 * (2 ** attempt)
+                    logger.warning(f"FMP rate limited, retrying in {delay}s")
+                    time.sleep(delay)
+                else:
+                    logger.warning(f"FMP {resp.status_code} for {path}: {resp.text[:200]}")
+                    return None
+            except Exception as e:
+                logger.warning(f"FMP request error for {path}: {e}")
+                if attempt < max_retries:
+                    time.sleep(2)
 
     return None
 

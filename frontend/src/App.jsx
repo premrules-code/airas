@@ -153,6 +153,9 @@ export default function App() {
               {(phase === "download_error" || phase === "index_error") && (
                 <span style={{ color: "var(--amber)" }}>{phaseMessage || "Proceeding without filing data..."}</span>
               )}
+              {phase === "warming_cache" && (
+                <><div className="spinner" style={{ margin: "0 auto 12px" }} />Loading financial data...</>
+              )}
               {phase === "routing" && "Routing query to agents..."}
               {phase === "context_gathered" && "Context gathered - agents analyzing..."}
             </div>

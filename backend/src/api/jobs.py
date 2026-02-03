@@ -18,6 +18,7 @@ from src.api.score_utils import (
     score_to_signal,
     AGENT_DISPLAY_META,
 )
+from src.tools.financial_tools import warm_cache
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +187,13 @@ def _run_analysis(job: Job, query: Optional[str], rag_level: str):
 
         # Auto-download and index SEC filings if needed
         _ensure_sec_data(job)
+
+        # Pre-warm FMP/yfinance cache so all agents read from cache
+        job.push_event({
+            "event": "phase",
+            "data": {"phase": "warming_cache", "message": "Loading financial data..."},
+        })
+        warm_cache(job.ticker)
 
         graph = build_analysis_graph()
 
