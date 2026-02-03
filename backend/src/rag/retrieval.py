@@ -91,9 +91,12 @@ class IntermediateRetriever:
 
     def _rewrite_query(self, query: str) -> str:
         query_lower = query.lower()
+        extras = []
         for term, expansion in self.EXPANSIONS.items():
             if term in query_lower:
-                return f"{query} {expansion}"
+                extras.append(expansion)
+        if extras:
+            return f"{query} {' '.join(extras)}"
         return query
 
 

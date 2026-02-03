@@ -1,5 +1,6 @@
 """Q&A route — RAG-powered question answering."""
 
+import re
 import logging
 
 import anthropic
@@ -12,6 +13,26 @@ from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Patterns that need data from multiple financial concepts
+_RATIO_PATTERNS = [
+    (r'debt.{0,10}equity', ['total debt long-term debt borrowings', 'shareholders equity stockholders equity total equity book value']),
+    (r'price.{0,10}earnings|p/?e\s', ['earnings per share net income EPS', 'stock price share price market cap']),
+    (r'price.{0,10}book|p/?b\s', ['book value shareholders equity total equity', 'stock price share price market cap']),
+    (r'current\s+ratio', ['current assets cash receivables', 'current liabilities accounts payable short-term debt']),
+    (r'quick\s+ratio', ['cash cash equivalents receivables liquid assets', 'current liabilities short-term obligations']),
+    (r'return\s+on\s+(equity|assets|invested)', ['net income earnings profit', 'total assets shareholders equity invested capital']),
+    (r'profit\s+margin|operating\s+margin|gross\s+margin', ['revenue net sales total revenue', 'cost of goods sold operating expenses net income gross profit']),
+]
+
+
+def _get_sub_queries(question: str) -> list[str]:
+    """Detect ratio/formula queries and return sub-queries for each component."""
+    q_lower = question.lower()
+    for pattern, expansions in _RATIO_PATTERNS:
+        if re.search(pattern, q_lower):
+            return expansions
+    return []
 
 
 def _run_qa(tickers, question: str) -> dict:
@@ -38,12 +59,36 @@ def _run_qa(tickers, question: str) -> dict:
     else:
         retriever = BasicRetriever(rag.index)
 
+    # Check if this is a ratio/formula query that needs multiple retrieval passes
+    sub_queries = _get_sub_queries(question)
+
     # Retrieve nodes for each ticker and merge
     all_nodes = []
     per_ticker = max(settings.top_k // len(tickers), 3) if len(tickers) > 1 else settings.top_k
+
     for t in tickers:
-        nodes = retriever.retrieve(question, top_k=per_ticker, ticker=t)
-        all_nodes.extend(nodes)
+        if sub_queries:
+            # Ratio query: retrieve for each component to ensure both sides are covered
+            per_sub = max(per_ticker // len(sub_queries), 2)
+            seen_ids = set()
+            for sq in sub_queries:
+                full_q = f"{t} {sq}"
+                nodes = retriever.retrieve(full_q, top_k=per_sub, ticker=t)
+                for n in nodes:
+                    nid = getattr(n, 'node_id', None) or (getattr(n.node, 'node_id', None) if hasattr(n, 'node') else id(n))
+                    if nid not in seen_ids:
+                        seen_ids.add(nid)
+                        all_nodes.append(n)
+            # Also retrieve with the original question for overall context
+            nodes = retriever.retrieve(question, top_k=per_sub, ticker=t)
+            for n in nodes:
+                nid = getattr(n, 'node_id', None) or (getattr(n.node, 'node_id', None) if hasattr(n, 'node') else id(n))
+                if nid not in seen_ids:
+                    seen_ids.add(nid)
+                    all_nodes.append(n)
+        else:
+            nodes = retriever.retrieve(question, top_k=per_ticker, ticker=t)
+            all_nodes.extend(nodes)
 
     ticker_label = " vs ".join(tickers)
 
@@ -116,6 +161,8 @@ def _run_qa(tickers, question: str) -> dict:
                     "Instructions:\n"
                     "- Provide a clear, detailed answer with specific numbers and dates.\n"
                     "- Reference sources using [Source N] notation inline in your answer.\n"
+                    "- If asked about a financial ratio, calculate it from the component data in the sources "
+                    "(e.g., for debt-to-equity, find total debt and total equity, then divide).\n"
                     "- If the context doesn't contain enough information, say so.\n"
                     f"- Use paragraphs to organize your answer.{comparison_hint}"
                 ),
