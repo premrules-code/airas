@@ -1150,37 +1150,42 @@ def _yfinance_get_news_sentiment(ticker: str) -> Dict:
 
 
 def warm_cache(ticker: str):
-    """Pre-fetch common FMP and yfinance data for a ticker.
+    """Best-effort pre-fetch of common FMP and yfinance data for a ticker.
 
-    Called before agents run so the in-memory cache is populated.
-    All 10 agents then read from cache instead of hitting APIs concurrently.
+    Each call tries once (no retries on rate limit) — whatever succeeds
+    goes into cache. Agents will fetch anything that was missed, with
+    per-key lock dedup preventing concurrent duplicate requests.
     """
     logger.info(f"Pre-warming cache for {ticker}...")
     calls = [
-        ("quote", lambda: fmp_client.get_quote(ticker)),
-        ("ratios", lambda: fmp_client.get_ratios(ticker)),
-        ("key-metrics", lambda: fmp_client.get_key_metrics(ticker)),
-        ("historical-prices", lambda: fmp_client.get_historical_prices(ticker)),
-        ("insider-trades", lambda: fmp_client.get_insider_trades_fmp(ticker)),
-        ("price-target", lambda: fmp_client.get_price_target_summary(ticker)),
-        ("grades", lambda: fmp_client.get_stock_grades(ticker)),
-        ("news", lambda: fmp_client.get_stock_news(ticker)),
+        ("quote", "quote", {"symbol": ticker}),
+        ("ratios", "ratios", {"symbol": ticker, "period": "annual", "limit": 1}),
+        ("key-metrics", "key-metrics", {"symbol": ticker, "period": "annual", "limit": 1}),
+        ("historical-prices", "historical-price-eod/light", {"symbol": ticker}),
+        ("insider-trades", "insider-trading/latest", {"symbol": ticker, "limit": 20}),
+        ("price-target", "price-target-summary", {"symbol": ticker}),
+        ("grades", "grades", {"symbol": ticker, "limit": 10}),
+        ("news", "news/stock", {"symbols": ticker, "limit": 10}),
     ]
-    for name, fn in calls:
+    cached = 0
+    for name, path, params in calls:
         try:
-            fn()
-            logger.info(f"  Cached {name} for {ticker}")
+            result = fmp_client._fmp_get(path, params, _warm=True)
+            if result is not None:
+                cached += 1
+                logger.info(f"  Cached {name} for {ticker}")
         except Exception as e:
-            logger.warning(f"  Cache warm failed for {name}/{ticker}: {e}")
+            logger.debug(f"  Warm skip {name}/{ticker}: {e}")
 
     # Also warm yfinance info (used as fallback)
     try:
-        _get_info_with_retry(ticker, max_retries=2)
+        _get_info_with_retry(ticker, max_retries=1)
+        cached += 1
         logger.info(f"  Cached yfinance info for {ticker}")
-    except Exception as e:
-        logger.warning(f"  yfinance warm failed for {ticker}: {e}")
+    except Exception:
+        pass
 
-    logger.info(f"Cache pre-warm complete for {ticker}")
+    logger.info(f"Cache pre-warm done for {ticker}: {cached}/{len(calls)+1} endpoints cached")
 
 
 # ============================================================================

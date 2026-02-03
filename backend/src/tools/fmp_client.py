@@ -44,8 +44,11 @@ def _rate_limit_wait():
         _last_call_time = time.time()
 
 
-def _fmp_get(path: str, params: dict = None, max_retries: int = 2) -> Optional[dict | list]:
-    """Make authenticated FMP API GET request with caching, dedup, and retry."""
+def _fmp_get(path: str, params: dict = None, max_retries: int = 2, _warm: bool = False) -> Optional[dict | list]:
+    """Make authenticated FMP API GET request with caching, dedup, and retry.
+
+    When _warm=True (cache pre-warming), only attempt once with no retries.
+    """
     settings = get_settings()
     if not settings.fmp_api_key:
         return None
@@ -75,7 +78,8 @@ def _fmp_get(path: str, params: dict = None, max_retries: int = 2) -> Optional[d
                 return cached_data
 
         # Make request with retry + global rate limiting
-        for attempt in range(max_retries + 1):
+        retries = 0 if _warm else max_retries
+        for attempt in range(retries + 1):
             try:
                 _rate_limit_wait()
                 resp = requests.get(url, params=params, timeout=15)
@@ -84,6 +88,8 @@ def _fmp_get(path: str, params: dict = None, max_retries: int = 2) -> Optional[d
                     _cache[cache_key] = (time.time(), data)
                     return data
                 elif resp.status_code == 429:
+                    if _warm:
+                        return None  # Don't block during warm-up
                     delay = 5 * (2 ** attempt)
                     logger.warning(f"FMP rate limited, retrying in {delay}s")
                     time.sleep(delay)
@@ -92,7 +98,7 @@ def _fmp_get(path: str, params: dict = None, max_retries: int = 2) -> Optional[d
                     return None
             except Exception as e:
                 logger.warning(f"FMP request error for {path}: {e}")
-                if attempt < max_retries:
+                if attempt < retries:
                     time.sleep(2)
 
     return None

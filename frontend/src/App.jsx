@@ -47,9 +47,11 @@ export default function App() {
   }, []);
 
   function startPolling(jobId) {
+    let failures = 0;
     pollRef.current = setInterval(async () => {
       try {
         const result = await getAnalysis(jobId);
+        failures = 0;
         if (result.agents?.length) {
           setAgents(result.agents);
         }
@@ -65,7 +67,13 @@ export default function App() {
           }
         }
       } catch {
-        // Retry silently
+        failures++;
+        if (failures >= 5) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          setLoading(false);
+          setError("Lost connection to analysis job. Please try again.");
+        }
       }
     }, 5000);
   }
