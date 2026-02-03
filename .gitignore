@@ -1,0 +1,35 @@
+# Python
+*.pyc
+__pycache__/
+*.so
+*.egg
+*.egg-info/
+.pytest_cache/
+
+# Environment / secrets
+.env
+.env.local
+venv/
+env/
+.venv/
+
+# Data & logs
+backend/data/raw/*.txt
+backend/temp_downloads/
+backend/logs/*.log
+*.log
+
+# Node
+node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Docker
+.docker/
+
+# OS
+Thumbs.db

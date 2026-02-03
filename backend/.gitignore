@@ -1,0 +1,28 @@
+# Python
+*.pyc
+__pycache__/
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Environment
+.env
+.env.local
+venv/
+env/
+
+# Data
+data/raw/*.txt
+temp_downloads/
+*.log
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Logs
+logs/*.log
