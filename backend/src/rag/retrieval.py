@@ -1,8 +1,9 @@
-"""Progressive RAG retrieval: Basic → Intermediate → Advanced."""
+"""Progressive RAG retrieval: Basic → Intermediate → Advanced → Corrective."""
 
 import json
 import logging
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, List
 
 import anthropic
 from llama_index.core.retrievers import VectorIndexRetriever
@@ -15,6 +16,28 @@ from llama_index.core.vector_stores import (
 from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CorrectiveResult:
+    """Result from CorrectiveRetriever with metadata about corrections."""
+
+    nodes: List  # Retrieved nodes after correction
+    grades: List  # GradeResult for each node
+    corrections_applied: List[str] = field(default_factory=list)
+    initial_relevant_ratio: float = 0.0
+    final_relevant_ratio: float = 0.0
+    num_correction_attempts: int = 0
+
+    @property
+    def confidence(self) -> float:
+        """Overall retrieval confidence based on relevance ratio."""
+        return self.final_relevant_ratio
+
+    @property
+    def improved(self) -> bool:
+        """Whether corrections improved relevance."""
+        return self.final_relevant_ratio > self.initial_relevant_ratio
 
 
 class BasicRetriever:
@@ -98,6 +121,55 @@ class IntermediateRetriever:
         if extras:
             return f"{query} {' '.join(extras)}"
         return query
+
+    def retrieve_full_section(
+        self,
+        ticker: str,
+        section: str,
+        fiscal_period: str,
+        max_chunks: int = 20,
+    ) -> list:
+        """Retrieve ALL chunks for a specific filing section, sorted by chunk_index.
+
+        Unlike retrieve() which returns top-k by similarity, this fetches every chunk
+        matching the (ticker, section, fiscal_period) triple and returns them in
+        document order.
+
+        Args:
+            ticker: Stock ticker (e.g., "AAPL")
+            section: SEC filing section (e.g., "income_statement", "balance_sheet")
+            fiscal_period: Fiscal period (e.g., "FY2023", "Q1 2024")
+            max_chunks: Maximum chunks to return (default 20, safety cap)
+
+        Returns:
+            List of nodes sorted by chunk_index, or empty list if section not found.
+        """
+        nodes = self.retrieve(
+            query="",
+            top_k=max_chunks,
+            ticker=ticker,
+            sections=[section],
+        )
+
+        if not nodes:
+            logger.info(f"No chunks found for {ticker}/{section}/{fiscal_period}")
+            return []
+
+        # Filter to exact fiscal_period (retrieve() only filters by ticker+section)
+        if fiscal_period:
+            nodes = [
+                n for n in nodes
+                if n.metadata.get("fiscal_period") == fiscal_period
+            ]
+
+        # Sort by chunk_index for document order
+        nodes.sort(key=lambda n: n.metadata.get("chunk_index", 0))
+
+        logger.info(
+            f"Full section retrieval: {ticker}/{section}/{fiscal_period} -> {len(nodes)} chunks"
+        )
+
+        return nodes[:max_chunks]
 
 
 class AdvancedRetriever:
@@ -217,3 +289,273 @@ class AdvancedRetriever:
         except Exception as e:
             logger.warning(f"Reranking failed, returning top-{top_n} by score: {e}")
             return sorted(nodes, key=lambda n: n.score or 0, reverse=True)[:top_n]
+
+
+class CorrectiveRetriever:
+    """Level 4: Corrective RAG with self-healing retrieval.
+
+    Adds relevance grading after retrieval. If documents are mostly
+    irrelevant, transforms the query and re-retrieves.
+
+    Flow:
+    1. Initial retrieval (IntermediateRetriever)
+    2. Check vector scores - skip grading if high confidence (hybrid mode)
+    3. Grade each document for relevance (RelevanceGrader)
+    4. If <threshold relevant: transform query and re-retrieve
+    5. Repeat up to max_corrections times
+    6. Return graded, filtered results
+
+    Usage:
+        retriever = CorrectiveRetriever(index)
+        result = retriever.retrieve(
+            query="What are Apple's risk factors?",
+            top_k=5,
+            ticker="AAPL",
+        )
+        print(f"Confidence: {result.confidence:.0%}")
+        print(f"Corrections: {result.corrections_applied}")
+        for node in result.nodes:
+            print(node.text[:100])
+    """
+
+    # Threshold for accepting retrieval (ratio of relevant docs)
+    DEFAULT_THRESHOLD = 0.4  # Lowered from 0.5 to reduce unnecessary corrections
+
+    # Vector similarity threshold for skipping grading (hybrid mode)
+    # If top doc has score >= this AND avg >= 0.70, assume they're relevant
+    HIGH_CONFIDENCE_THRESHOLD = 0.72
+
+    def __init__(
+        self,
+        index,
+        relevance_threshold: float = DEFAULT_THRESHOLD,
+        max_corrections: int = 2,
+        enable_web_search: bool = False,
+        skip_grading_threshold: float = HIGH_CONFIDENCE_THRESHOLD,
+    ):
+        """Initialize corrective retriever.
+
+        Args:
+            index: LlamaIndex VectorStoreIndex
+            relevance_threshold: Ratio of relevant docs to accept (0-1)
+            max_corrections: Maximum correction attempts
+            enable_web_search: Whether to use web search fallback
+            skip_grading_threshold: Min vector score to skip LLM grading (hybrid mode)
+        """
+        self.index = index
+        self.threshold = relevance_threshold
+        self.max_corrections = max_corrections
+        self.enable_web_search = enable_web_search
+        self.skip_grading_threshold = skip_grading_threshold
+
+        # Lazy load correction components
+        self._grader = None
+        self._transformer = None
+        self._web_search = None
+
+    @property
+    def grader(self):
+        """Lazy load RelevanceGrader."""
+        if self._grader is None:
+            from src.rag.relevance_grader import RelevanceGrader
+            self._grader = RelevanceGrader()
+        return self._grader
+
+    @property
+    def transformer(self):
+        """Lazy load QueryTransformer."""
+        if self._transformer is None:
+            from src.rag.corrections import QueryTransformer
+            self._transformer = QueryTransformer()
+        return self._transformer
+
+    @property
+    def web_search(self):
+        """Lazy load WebSearchFallback."""
+        if self._web_search is None and self.enable_web_search:
+            from src.rag.corrections import WebSearchFallback
+            self._web_search = WebSearchFallback()
+        return self._web_search
+
+    def _check_high_confidence(self, nodes) -> bool:
+        """Check if retrieval results are high confidence based on vector scores.
+
+        Returns True if we should skip LLM grading (hybrid mode).
+        Uses a practical threshold based on real embedding score distributions.
+        """
+        if not nodes:
+            return False
+
+        # Get scores from nodes
+        scores = [node.score for node in nodes if node.score is not None]
+        if not scores:
+            return False
+
+        top_score = max(scores)
+        avg_score = sum(scores) / len(scores)
+
+        # High confidence if:
+        # - Top result is very relevant (>= threshold) AND
+        # - Average is reasonably high (>= 0.70)
+        # This allows us to trust strong top results while ensuring
+        # the rest aren't completely off-topic
+        is_high_conf = top_score >= self.skip_grading_threshold and avg_score >= 0.70
+
+        if is_high_conf:
+            logger.info(
+                f"High confidence retrieval (top={top_score:.3f}, avg={avg_score:.3f}), "
+                f"skipping LLM grading"
+            )
+
+        return is_high_conf
+
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 5,
+        ticker: str = None,
+        sections: list[str] = None,
+    ) -> CorrectiveResult:
+        """Retrieve with self-correction loop.
+
+        Args:
+            query: Search query
+            top_k: Number of results to return
+            ticker: Stock ticker for filtering
+            sections: SEC sections to filter
+
+        Returns:
+            CorrectiveResult with nodes, grades, and correction metadata
+        """
+        base_retriever = IntermediateRetriever(self.index)
+
+        # Step 1: Initial retrieval
+        nodes = base_retriever.retrieve(query, top_k=top_k, ticker=ticker, sections=sections)
+
+        if not nodes:
+            logger.warning("Initial retrieval returned no results")
+            return CorrectiveResult(
+                nodes=[],
+                grades=[],
+                initial_relevant_ratio=0.0,
+                final_relevant_ratio=0.0,
+            )
+
+        # Step 2: Hybrid check - skip grading if vector scores are high
+        if self._check_high_confidence(nodes):
+            # Create synthetic "relevant" grades for high-confidence results
+            from src.rag.relevance_grader import GradeResult
+            synthetic_grades = [
+                GradeResult(
+                    grade="relevant",
+                    confidence=node.score or 0.9,
+                    reason="High vector similarity (skipped LLM grading)",
+                    doc_index=i,
+                )
+                for i, node in enumerate(nodes)
+            ]
+            return CorrectiveResult(
+                nodes=nodes,
+                grades=synthetic_grades,
+                corrections_applied=["hybrid_skip"],
+                initial_relevant_ratio=1.0,
+                final_relevant_ratio=1.0,
+                num_correction_attempts=0,
+            )
+
+        # Step 3: Grade documents with LLM
+        doc_texts = [node.text for node in nodes]
+        grades = self.grader.grade_batch(query, doc_texts)
+
+        # Calculate relevance ratio
+        relevant_count = sum(1 for g in grades if g.grade == "relevant")
+        partial_count = sum(1 for g in grades if g.grade == "partial")
+        # Count relevant and partial as "usable"
+        usable_ratio = (relevant_count + partial_count * 0.5) / len(grades)
+        initial_ratio = usable_ratio
+
+        logger.info(
+            f"Initial retrieval: {relevant_count} relevant, {partial_count} partial, "
+            f"{len(grades) - relevant_count - partial_count} irrelevant "
+            f"(ratio: {usable_ratio:.0%})"
+        )
+
+        # Step 3: Correction loop if below threshold
+        corrections_applied = []
+        current_query = query
+        best_nodes = nodes
+        best_grades = grades
+        best_ratio = usable_ratio
+
+        for attempt in range(self.max_corrections):
+            if usable_ratio >= self.threshold:
+                break
+
+            logger.info(f"Correction attempt {attempt + 1}: ratio {usable_ratio:.0%} < {self.threshold:.0%}")
+
+            # Transform query
+            failed_docs = [
+                nodes[i].text for i, g in enumerate(grades)
+                if g.grade == "irrelevant"
+            ]
+            transform_result = self.transformer.transform(
+                current_query, failed_docs, ticker
+            )
+
+            if transform_result.transformed_query == current_query:
+                logger.info("Query transformation produced no change, stopping")
+                break
+
+            current_query = transform_result.transformed_query
+            corrections_applied.append(f"{transform_result.strategy}: {current_query[:50]}...")
+
+            logger.info(f"Transformed query: {current_query[:100]}")
+
+            # Re-retrieve
+            new_nodes = base_retriever.retrieve(
+                current_query, top_k=top_k, ticker=ticker, sections=sections
+            )
+
+            if not new_nodes:
+                logger.warning("Re-retrieval returned no results")
+                continue
+
+            # Re-grade
+            new_doc_texts = [node.text for node in new_nodes]
+            new_grades = self.grader.grade_batch(query, new_doc_texts)  # Grade against ORIGINAL query
+
+            new_relevant = sum(1 for g in new_grades if g.grade == "relevant")
+            new_partial = sum(1 for g in new_grades if g.grade == "partial")
+            new_ratio = (new_relevant + new_partial * 0.5) / len(new_grades)
+
+            logger.info(f"After correction: {new_relevant} relevant, {new_partial} partial (ratio: {new_ratio:.0%})")
+
+            # Keep best results
+            if new_ratio > best_ratio:
+                best_nodes = new_nodes
+                best_grades = new_grades
+                best_ratio = new_ratio
+                usable_ratio = new_ratio
+                nodes = new_nodes
+                grades = new_grades
+
+        # Step 4: Optional web search fallback
+        if best_ratio < self.threshold and self.web_search and self.web_search.enabled:
+            logger.info("Trying web search fallback")
+            web_results = self.web_search.search(query, ticker)
+            if web_results:
+                corrections_applied.append(f"web_search: {len(web_results)} results")
+                # Note: Web results would need to be converted to nodes
+                # For now, just log that we tried
+
+        # Step 5: Filter to relevant nodes only (optional - can return all with grades)
+        # For now, return all nodes with their grades so caller can decide
+
+        return CorrectiveResult(
+            nodes=best_nodes,
+            grades=best_grades,
+            corrections_applied=corrections_applied,
+            initial_relevant_ratio=initial_ratio,
+            final_relevant_ratio=best_ratio,
+            num_correction_attempts=len(corrections_applied),
+        )
