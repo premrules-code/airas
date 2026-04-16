@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     langfuse_public_key: Optional[str] = None
     langfuse_secret_key: Optional[str] = None
     langfuse_host: str = "https://cloud.langfuse.com"
+
+    # Galileo AI (optional — LLM observability & guardrails)
+    galileo_api_key: Optional[str] = None
+    galileo_project: str = "airas"
+    galileo_log_stream: str = "production"
     
     # Reddit (optional — for social sentiment)
     reddit_client_id: Optional[str] = None
@@ -55,7 +60,7 @@ class Settings(BaseSettings):
     # Models
     openai_model: str = "gpt-4-turbo-preview"
     openai_embedding_model: str = "text-embedding-3-small"
-    claude_model: str = "claude-sonnet-4-20250514"
+    claude_model: str = "claude-opus-4-5-20251101"
     
     # Paths
     data_dir: Path = Path("data")

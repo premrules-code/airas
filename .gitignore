@@ -33,3 +33,7 @@ frontend/dist/
 
 # OS
 Thumbs.db
+.gstack/
+
+# Private docs (tracked in separate private repo)
+docs/

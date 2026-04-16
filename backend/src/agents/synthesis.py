@@ -9,6 +9,7 @@ import anthropic
 from config.settings import get_settings
 from src.models.structured_outputs import AgentOutput, InvestmentRecommendation
 from src.agents.tracing import TracingManager
+from src.guardrails.galileo_guardrails import check_hallucination, check_pii
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,26 @@ def synthesize(
 
     # Generate thesis via Claude
     thesis_data = _generate_thesis(outputs, ticker, rec, settings)
+
+    # Galileo: Check thesis for hallucination and PII
+    thesis_text = thesis_data.get("thesis", "")
+    if thesis_text:
+        # Build context from agent summaries for groundedness check
+        agent_context = "\n".join(o.summary for o in outputs)
+
+        # Check hallucination
+        hallucination_result = check_hallucination(thesis_text, [agent_context])
+        if not hallucination_result["is_grounded"]:
+            logger.warning(
+                f"Synthesis thesis may contain hallucinations "
+                f"(groundedness: {hallucination_result['score']:.0%})"
+            )
+
+        # Check PII and redact if found
+        pii_result = check_pii(thesis_text)
+        if pii_result["has_pii"]:
+            logger.warning(f"PII detected in thesis: {pii_result['pii_types']}")
+            thesis_data["thesis"] = pii_result["redacted_text"]
 
     # Clamp category scores to [-1, 1]
     for key in category_scores:

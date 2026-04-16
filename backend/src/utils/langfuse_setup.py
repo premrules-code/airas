@@ -27,6 +27,11 @@ def setup_langfuse() -> Optional[Langfuse]:
     logger.info("✅ Langfuse connected")
     return _langfuse_client
 
+def get_langfuse_client() -> Optional[Langfuse]:
+    """Return the global Langfuse client (or None if not configured)."""
+    return _langfuse_client
+
+
 def trace_agent(agent_name: str):
     """Decorator to trace agent execution."""
     def decorator(func):

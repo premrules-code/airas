@@ -1,0 +1,242 @@
+{
+  "timestamp": "2026-02-19T13:29:40.847183",
+  "baseline": {
+    "retriever": "IntermediateRetriever",
+    "queries": 10,
+    "avg_latency_ms": 1249.6785085182637,
+    "total_latency_ms": 12496.785085182637,
+    "results": [
+      {
+        "query": "What was Apple's total revenue in FY2023?...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 2040.6633750535548
+      },
+      {
+        "query": "What are Apple's main risk factors disclosed in th...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 603.0062497593462
+      },
+      {
+        "query": "How much cash and cash equivalents did Apple have ...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 955.0922093912959
+      },
+      {
+        "query": "What was Apple's gross margin percentage in FY2023...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 700.4990838468075
+      },
+      {
+        "query": "How much did Apple spend on research and developme...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 401.42300026491284
+      },
+      {
+        "query": "What is Apple's total long-term debt?...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 494.4049580954015
+      },
+      {
+        "query": "What geographic regions does Apple report revenue ...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 624.1636672057211
+      },
+      {
+        "query": "How much revenue did Apple generate from Services ...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 1501.3826247304678
+      },
+      {
+        "query": "What was Apple's effective tax rate in FY2023?...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 2840.6748338602483
+      },
+      {
+        "query": "How much did Apple return to shareholders through ...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 2335.475082974881
+      }
+    ]
+  },
+  "crag": {
+    "retriever": "CorrectiveRetriever",
+    "queries": 10,
+    "avg_latency_ms": 913.2876709103584,
+    "total_latency_ms": 9132.876709103584,
+    "correction_rate": 0.0,
+    "improvement_rate": 0.0,
+    "total_corrections": 0,
+    "results": [
+      {
+        "query": "What was Apple's total revenue in FY2023?...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 2401.719500310719,
+        "initial_relevance": 0.5,
+        "final_relevance": 0.5,
+        "corrections": 0,
+        "grades": [
+          "partial",
+          "partial",
+          "partial",
+          "partial",
+          "partial"
+        ]
+      },
+      {
+        "query": "What are Apple's main risk factors disclosed in th...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 731.2284167855978,
+        "initial_relevance": 0.5,
+        "final_relevance": 0.5,
+        "corrections": 0,
+        "grades": [
+          "partial",
+          "partial",
+          "partial",
+          "partial",
+          "partial"
+        ]
+      },
+      {
+        "query": "How much cash and cash equivalents did Apple have ...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 637.5827081501484,
+        "initial_relevance": 0.5,
+        "final_relevance": 0.5,
+        "corrections": 0,
+        "grades": [
+          "partial",
+          "partial",
+          "partial",
+          "partial",
+          "partial"
+        ]
+      },
+      {
+        "query": "What was Apple's gross margin percentage in FY2023...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 960.5819587595761,
+        "initial_relevance": 0.5,
+        "final_relevance": 0.5,
+        "corrections": 0,
+        "grades": [
+          "partial",
+          "partial",
+          "partial",
+          "partial",
+          "partial"
+        ]
+      },
+      {
+        "query": "How much did Apple spend on research and developme...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 684.647582937032,
+        "initial_relevance": 0.5,
+        "final_relevance": 0.5,
+        "corrections": 0,
+        "grades": [
+          "partial",
+          "partial",
+          "partial",
+          "partial",
+          "partial"
+        ]
+      },
+      {
+        "query": "What is Apple's total long-term debt?...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 747.9547094553709,
+        "initial_relevance": 0.5,
+        "final_relevance": 0.5,
+        "corrections": 0,
+        "grades": [
+          "partial",
+          "partial",
+          "partial",
+          "partial",
+          "partial"
+        ]
+      },
+      {
+        "query": "What geographic regions does Apple report revenue ...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 613.3613749407232,
+        "initial_relevance": 0.5,
+        "final_relevance": 0.5,
+        "corrections": 0,
+        "grades": [
+          "partial",
+          "partial",
+          "partial",
+          "partial",
+          "partial"
+        ]
+      },
+      {
+        "query": "How much revenue did Apple generate from Services ...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 725.579374935478,
+        "initial_relevance": 0.5,
+        "final_relevance": 0.5,
+        "corrections": 0,
+        "grades": [
+          "partial",
+          "partial",
+          "partial",
+          "partial",
+          "partial"
+        ]
+      },
+      {
+        "query": "What was Apple's effective tax rate in FY2023?...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 662.6520408317447,
+        "initial_relevance": 0.5,
+        "final_relevance": 0.5,
+        "corrections": 0,
+        "grades": [
+          "partial",
+          "partial",
+          "partial",
+          "partial",
+          "partial"
+        ]
+      },
+      {
+        "query": "How much did Apple return to shareholders through ...",
+        "ticker": "AAPL",
+        "count": 5,
+        "latency_ms": 967.5690419971943,
+        "initial_relevance": 0.5,
+        "final_relevance": 0.5,
+        "corrections": 0,
+        "grades": [
+          "partial",
+          "partial",
+          "partial",
+          "partial",
+          "partial"
+        ]
+      }
+    ]
+  }
+}

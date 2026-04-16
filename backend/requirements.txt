@@ -39,6 +39,7 @@ finnhub-python>=2.4.19
 
 # Monitoring & Tracing
 langfuse>=2.50.0
+galileo-observe>=1.0.0
 
 # Agent Orchestration
 langgraph>=0.2.0

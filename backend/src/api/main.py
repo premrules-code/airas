@@ -12,7 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from config.settings import get_settings
 from config.logging_config import setup_logging
 from src.utils.llama_setup import configure_llama_index
-from src.utils.langfuse_setup import setup_langfuse
+from src.utils.langfuse_setup import setup_langfuse, get_langfuse_client
+from src.utils.galileo_setup import init_galileo, flush_galileo
 
 from src.api.routes import health, analysis, query, qa, sec
 
@@ -29,12 +30,21 @@ async def lifespan(app: FastAPI):
     setup_logging(settings.log_level)
     configure_llama_index()
     setup_langfuse()
+    init_galileo()
     logger.info("AIRAS API started")
     if STATIC_DIR.exists():
         logger.info(f"Serving frontend from {STATIC_DIR}")
     else:
         logger.info("No static dir found — frontend served by Vite dev server")
     yield
+    # Flush and shutdown Langfuse so its background thread stops sending
+    # outbound traffic — required for Railway Serverless (scale-to-zero)
+    lf = get_langfuse_client()
+    if lf:
+        lf.flush()
+        lf.shutdown()
+    # Flush Galileo logs
+    flush_galileo()
     logger.info("AIRAS API shutting down")
 
 

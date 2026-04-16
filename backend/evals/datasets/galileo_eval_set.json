@@ -1,0 +1,229 @@
+{
+  "version": "1.0",
+  "description": "Galileo evaluation dataset for testing hallucination, groundedness, PII detection, and context relevance",
+  "created_at": "2024-02-20",
+  "eval_types": ["groundedness", "context_relevance", "pii_detection", "factual_accuracy"],
+  "queries": [
+    {
+      "id": "gal_001",
+      "ticker": "AAPL",
+      "query": "What was Apple's total revenue in FY2023?",
+      "expected_answer": "Apple reported total net sales of $383.3 billion for fiscal year 2023.",
+      "context": "Apple Inc. reported total net sales of $383,285 million ($383.3 billion) for the fiscal year ended September 30, 2023, compared to $394,328 million for fiscal year 2022.",
+      "eval_criteria": {
+        "must_contain": ["383", "billion", "2023"],
+        "must_not_contain": ["400 billion", "500 billion"],
+        "expected_groundedness": 0.9,
+        "should_hallucinate": false
+      },
+      "category": "financial_metrics",
+      "difficulty": "easy"
+    },
+    {
+      "id": "gal_002",
+      "ticker": "AAPL",
+      "query": "What are Apple's main competitive advantages?",
+      "expected_answer": "Apple's competitive advantages include its integrated hardware/software ecosystem, strong brand loyalty, services revenue growth, and significant R&D investments.",
+      "context": "Apple designs and manufactures consumer electronics, software, and services. The company's products include iPhone, Mac, iPad, and wearables. Services revenue reached $85.2 billion in FY2023.",
+      "eval_criteria": {
+        "must_contain": ["ecosystem", "services"],
+        "must_not_contain": [],
+        "expected_groundedness": 0.7,
+        "should_hallucinate": false,
+        "notes": "Some inference allowed from context"
+      },
+      "category": "competitive_analysis",
+      "difficulty": "medium"
+    },
+    {
+      "id": "gal_003",
+      "ticker": "AAPL",
+      "query": "What is Apple's debt-to-equity ratio?",
+      "expected_answer": "Apple's debt-to-equity ratio is approximately 1.8, with total debt of $111 billion and shareholders equity of $62 billion.",
+      "context": "As of September 30, 2023, Apple had total term debt of $111,088 million and total shareholders' equity of $62,146 million.",
+      "eval_criteria": {
+        "must_contain": ["debt", "equity"],
+        "must_not_contain": [],
+        "expected_groundedness": 0.85,
+        "should_hallucinate": false,
+        "requires_calculation": true
+      },
+      "category": "financial_metrics",
+      "difficulty": "medium"
+    },
+    {
+      "id": "gal_004",
+      "ticker": "AAPL",
+      "query": "Who is Apple's CEO and what is their compensation?",
+      "expected_answer": "Tim Cook is Apple's CEO. His total compensation for FY2023 was approximately $63 million.",
+      "context": "Timothy D. Cook has served as Apple's Chief Executive Officer since August 2011. Executive compensation details are disclosed in the company's proxy statement.",
+      "eval_criteria": {
+        "must_contain": ["Tim Cook", "CEO"],
+        "must_not_contain": ["Steve Jobs is current CEO"],
+        "expected_groundedness": 0.6,
+        "should_hallucinate": false,
+        "may_contain_pii": true,
+        "notes": "Executive names are public info, not PII"
+      },
+      "category": "management",
+      "difficulty": "easy"
+    },
+    {
+      "id": "gal_005",
+      "ticker": "AAPL",
+      "query": "What were the insider transactions at Apple last quarter?",
+      "expected_answer": "In the last quarter, Apple executives sold shares as part of pre-planned 10b5-1 trading plans.",
+      "context": "Form 4 filings indicate that company officers executed pre-planned stock sales under Rule 10b5-1 trading plans during the quarter.",
+      "eval_criteria": {
+        "must_contain": ["insider", "10b5-1"],
+        "must_not_contain": [],
+        "expected_groundedness": 0.8,
+        "should_hallucinate": false,
+        "may_contain_pii": false
+      },
+      "category": "insider_activity",
+      "difficulty": "medium"
+    },
+    {
+      "id": "gal_006",
+      "ticker": "TSLA",
+      "query": "What are Tesla's main risk factors?",
+      "expected_answer": "Tesla faces risks including production scaling challenges, competition from legacy automakers, regulatory changes affecting EV subsidies, and supply chain constraints for batteries.",
+      "context": "Tesla disclosed risk factors including: ability to scale production, competition in the EV market, regulatory environment for zero-emission vehicles, and dependency on lithium-ion battery supply.",
+      "eval_criteria": {
+        "must_contain": ["production", "competition", "battery"],
+        "must_not_contain": [],
+        "expected_groundedness": 0.85,
+        "should_hallucinate": false
+      },
+      "category": "risk_factors",
+      "difficulty": "medium"
+    },
+    {
+      "id": "gal_007",
+      "ticker": "MSFT",
+      "query": "How much revenue did Microsoft generate from Azure?",
+      "expected_answer": "Microsoft's Intelligent Cloud segment, which includes Azure, generated $96.8 billion in revenue for FY2024.",
+      "context": "Microsoft's Intelligent Cloud segment revenue was $96.8 billion for the fiscal year ended June 30, 2024. Azure revenue growth was 29% year-over-year.",
+      "eval_criteria": {
+        "must_contain": ["Azure", "Cloud", "96", "billion"],
+        "must_not_contain": ["AWS", "Google Cloud"],
+        "expected_groundedness": 0.95,
+        "should_hallucinate": false
+      },
+      "category": "business_segments",
+      "difficulty": "easy"
+    },
+    {
+      "id": "gal_008",
+      "ticker": "AAPL",
+      "query": "What is Apple's price-to-earnings ratio and is it overvalued?",
+      "expected_answer": "Apple's P/E ratio is approximately 28-30x based on current market price and TTM earnings. Valuation depends on growth expectations and comparable analysis.",
+      "context": "Apple's diluted EPS for FY2023 was $6.13. The company reported net income of $96.995 billion.",
+      "eval_criteria": {
+        "must_contain": ["P/E", "earnings"],
+        "must_not_contain": ["definitely overvalued", "definitely undervalued"],
+        "expected_groundedness": 0.5,
+        "should_hallucinate": false,
+        "notes": "Current price not in context, so groundedness should be lower"
+      },
+      "category": "valuation",
+      "difficulty": "hard"
+    },
+    {
+      "id": "gal_009",
+      "ticker": "NVDA",
+      "query": "What is driving NVIDIA's revenue growth?",
+      "expected_answer": "NVIDIA's revenue growth is primarily driven by data center demand for AI/ML training, particularly its H100 and A100 GPU products.",
+      "context": "NVIDIA reported Data Center revenue of $47.5 billion in FY2024, up 217% year-over-year, driven by demand for AI training and inference solutions. Gaming revenue was $10.4 billion.",
+      "eval_criteria": {
+        "must_contain": ["Data Center", "AI", "GPU"],
+        "must_not_contain": ["declining revenue"],
+        "expected_groundedness": 0.9,
+        "should_hallucinate": false
+      },
+      "category": "business_drivers",
+      "difficulty": "medium"
+    },
+    {
+      "id": "gal_010",
+      "ticker": "AAPL",
+      "query": "What percentage of Apple's revenue comes from iPhone?",
+      "expected_answer": "iPhone generated approximately 52% of Apple's total revenue in FY2023, with iPhone revenue of $200.6 billion out of total revenue of $383.3 billion.",
+      "context": "Apple's iPhone segment generated $200,583 million in net sales for FY2023. Total net sales were $383,285 million. Mac revenue was $29,357 million, iPad was $28,300 million, Wearables was $39,845 million, and Services was $85,200 million.",
+      "eval_criteria": {
+        "must_contain": ["iPhone", "52%", "200"],
+        "must_not_contain": ["iPhone is 80%", "iPhone is declining"],
+        "expected_groundedness": 0.95,
+        "should_hallucinate": false,
+        "requires_calculation": true
+      },
+      "category": "business_segments",
+      "difficulty": "medium"
+    }
+  ],
+  "hallucination_tests": [
+    {
+      "id": "hal_001",
+      "description": "Test detection of fabricated revenue numbers",
+      "query": "What was Apple's revenue?",
+      "context": "Apple reported total net sales of $383.3 billion for FY2023.",
+      "bad_answer": "Apple reported total net sales of $450 billion for FY2023, making it the most profitable year ever.",
+      "good_answer": "Apple reported total net sales of $383.3 billion for FY2023.",
+      "expected_bad_groundedness": 0.3,
+      "expected_good_groundedness": 0.95
+    },
+    {
+      "id": "hal_002",
+      "description": "Test detection of invented product launches",
+      "query": "What new products did Apple announce?",
+      "context": "Apple announced the iPhone 15 series and Apple Watch Series 9 in September 2023.",
+      "bad_answer": "Apple announced the iPhone 16, Apple Car, and AR glasses in 2023.",
+      "good_answer": "Apple announced the iPhone 15 series and Apple Watch Series 9 in September 2023.",
+      "expected_bad_groundedness": 0.2,
+      "expected_good_groundedness": 0.95
+    },
+    {
+      "id": "hal_003",
+      "description": "Test detection of fabricated executive quotes",
+      "query": "What did the CEO say about future growth?",
+      "context": "Tim Cook stated the company remains focused on innovation and customer experience.",
+      "bad_answer": "Tim Cook said 'We will definitely double revenue next year and acquire Tesla.'",
+      "good_answer": "Tim Cook stated the company remains focused on innovation and customer experience.",
+      "expected_bad_groundedness": 0.1,
+      "expected_good_groundedness": 0.9
+    }
+  ],
+  "pii_tests": [
+    {
+      "id": "pii_001",
+      "description": "Test PII detection in output",
+      "text_with_pii": "Contact John Smith at john.smith@example.com or call 555-123-4567 for investor relations.",
+      "expected_pii_types": ["email", "phone"],
+      "text_without_pii": "Contact investor relations for more information."
+    },
+    {
+      "id": "pii_002",
+      "description": "Test SSN detection",
+      "text_with_pii": "Employee ID: 123-45-6789 was processed for stock options.",
+      "expected_pii_types": ["ssn"],
+      "text_without_pii": "Stock options were processed for the employee."
+    }
+  ],
+  "metadata": {
+    "total_queries": 10,
+    "hallucination_tests": 3,
+    "pii_tests": 2,
+    "tickers": ["AAPL", "TSLA", "MSFT", "NVDA"],
+    "categories": {
+      "financial_metrics": 3,
+      "competitive_analysis": 1,
+      "management": 1,
+      "insider_activity": 1,
+      "risk_factors": 1,
+      "business_segments": 2,
+      "valuation": 1,
+      "business_drivers": 1
+    }
+  }
+}

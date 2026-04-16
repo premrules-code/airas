@@ -1,0 +1,247 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "sc_aapl_full_e7a2b3c1",
+  "ticker": "AAPL",
+  "query": null,
+  "recorded_at": "2026-04-14T10:00:00Z",
+  "routing": {
+    "mode": "full",
+    "active_agents": [
+      "financial_analyst", "news_sentiment", "technical_analyst",
+      "risk_assessment", "competitive_analysis", "insider_activity",
+      "options_analysis", "social_sentiment", "earnings_analysis",
+      "analyst_ratings"
+    ],
+    "categories": ["full_analysis"],
+    "acceptable_agent_sets": [
+      [
+        "analyst_ratings", "competitive_analysis", "earnings_analysis",
+        "financial_analyst", "insider_activity", "news_sentiment",
+        "options_analysis", "risk_assessment", "social_sentiment",
+        "technical_analyst"
+      ]
+    ]
+  },
+  "rag_context": {
+    "financial_analyst": "Apple reported total net sales of $383,285 million for fiscal year 2023, a decrease of 2.8% from $394,328 million in 2022.",
+    "earnings_analysis": "Apple's diluted EPS was $6.13 in FY2023, compared to $6.11 in FY2022. Gross margin improved to 44.1% from 43.3%.",
+    "risk_assessment": "Risk factors include macroeconomic conditions, supply chain disruptions, intense competition, and regulatory scrutiny.",
+    "competitive_analysis": "Apple maintains dominant market share in premium smartphones. Services segment reached $85.2B revenue, growing 9% YoY.",
+    "news_sentiment": "Recent coverage focused on Apple Vision Pro launch and AI integration plans for iOS 18."
+  },
+  "agent_executions": [
+    {
+      "agent_name": "financial_analyst",
+      "tool_calls": [
+        {
+          "tool": "get_stock_price",
+          "input": {"ticker": "AAPL"},
+          "output": {"price": 178.50, "change_pct": 1.2, "volume": 45000000}
+        },
+        {
+          "tool": "calculate_financial_ratio",
+          "input": {"ticker": "AAPL", "ratio_type": "pe_ratio"},
+          "output": {"value": 28.5, "interpretation": "Above sector average"}
+        }
+      ],
+      "output": {
+        "score": 0.35,
+        "confidence": 0.85,
+        "summary": "AAPL shows strong fundamentals with improving margins despite modest revenue decline.",
+        "metrics": {"pe_ratio": 28.5, "gross_margin": 0.441, "revenue_growth": -0.028},
+        "strengths": ["Improving gross margins", "Strong services growth", "Massive cash position"],
+        "weaknesses": ["Revenue decline", "Premium valuation", "China market headwinds"],
+        "sources": ["SEC 10-K FY2023", "FMP API"]
+      },
+      "llm_calls": []
+    },
+    {
+      "agent_name": "technical_analyst",
+      "tool_calls": [
+        {
+          "tool": "get_stock_price",
+          "input": {"ticker": "AAPL"},
+          "output": {"price": 178.50, "change_pct": 1.2, "volume": 45000000}
+        },
+        {
+          "tool": "get_technical_indicators",
+          "input": {"ticker": "AAPL", "indicator": "rsi"},
+          "output": {"rsi": 55.3, "sma_50": 172.40, "sma_200": 168.90}
+        }
+      ],
+      "output": {
+        "score": 0.25,
+        "confidence": 0.75,
+        "summary": "Neutral-bullish technical setup with price above key moving averages but RSI not oversold.",
+        "metrics": {"rsi": 55.3, "sma_50": 172.40, "sma_200": 168.90},
+        "strengths": ["Trading above 50 and 200 SMA", "Moderate RSI"],
+        "weaknesses": ["No clear breakout pattern", "Volume declining"],
+        "sources": ["FMP Historical Prices", "ta library"]
+      },
+      "llm_calls": []
+    },
+    {
+      "agent_name": "news_sentiment",
+      "tool_calls": [],
+      "output": {
+        "score": 0.40,
+        "confidence": 0.70,
+        "summary": "Positive sentiment driven by Vision Pro launch and AI strategy announcements.",
+        "metrics": {"sentiment_score": 0.6, "article_count": 45},
+        "strengths": ["Vision Pro excitement", "AI integration plans"],
+        "weaknesses": ["Regulatory scrutiny in EU"],
+        "sources": ["RAG: SEC filings news sections"]
+      },
+      "llm_calls": []
+    },
+    {
+      "agent_name": "risk_assessment",
+      "tool_calls": [
+        {
+          "tool": "get_stock_price",
+          "input": {"ticker": "AAPL"},
+          "output": {"price": 178.50, "change_pct": 1.2, "volume": 45000000}
+        }
+      ],
+      "output": {
+        "score": -0.15,
+        "confidence": 0.80,
+        "summary": "Moderate risk profile with regulatory headwinds and China exposure being primary concerns.",
+        "metrics": {"beta": 1.12, "max_drawdown_1y": -0.18},
+        "strengths": ["Strong balance sheet buffers risk"],
+        "weaknesses": ["EU DMA compliance costs", "China revenue exposure", "Supply chain concentration"],
+        "sources": ["SEC 10-K Risk Factors", "FMP API"]
+      },
+      "llm_calls": []
+    },
+    {
+      "agent_name": "earnings_analysis",
+      "tool_calls": [],
+      "output": {
+        "score": 0.30,
+        "confidence": 0.80,
+        "summary": "Earnings quality is strong with improving margins offsetting revenue headwinds.",
+        "metrics": {"eps": 6.13, "eps_growth": 0.003, "gross_margin": 0.441},
+        "strengths": ["Margin expansion", "Consistent EPS growth"],
+        "weaknesses": ["Flat revenue growth", "Services growth deceleration risk"],
+        "sources": ["RAG: SEC 10-K Income Statement"]
+      },
+      "llm_calls": []
+    },
+    {
+      "agent_name": "competitive_analysis",
+      "tool_calls": [],
+      "output": {
+        "score": 0.50,
+        "confidence": 0.75,
+        "summary": "Apple maintains a strong competitive moat through ecosystem lock-in and brand premium.",
+        "metrics": {"market_share_premium_phones": 0.55},
+        "strengths": ["Ecosystem lock-in", "Brand premium", "Services moat"],
+        "weaknesses": ["Android market share gains in emerging markets"],
+        "sources": ["RAG: SEC 10-K competitive analysis"]
+      },
+      "llm_calls": []
+    },
+    {
+      "agent_name": "insider_activity",
+      "tool_calls": [
+        {
+          "tool": "get_insider_trades",
+          "input": {"ticker": "AAPL"},
+          "output": {"recent_trades": [{"insider": "Tim Cook", "type": "sale", "shares": 50000, "value": 8900000}]}
+        }
+      ],
+      "output": {
+        "score": -0.10,
+        "confidence": 0.60,
+        "summary": "Modest insider selling, primarily routine RSU vesting sales by executives.",
+        "metrics": {"net_insider_shares": -120000, "insider_buy_count": 0},
+        "strengths": ["Selling appears routine/planned"],
+        "weaknesses": ["No insider buying", "Net negative insider activity"],
+        "sources": ["Finnhub Insider API"]
+      },
+      "llm_calls": []
+    },
+    {
+      "agent_name": "options_analysis",
+      "tool_calls": [
+        {
+          "tool": "get_options_data",
+          "input": {"ticker": "AAPL"},
+          "output": {"put_call_ratio": 0.72, "implied_volatility": 0.22, "max_pain": 175.0}
+        }
+      ],
+      "output": {
+        "score": 0.15,
+        "confidence": 0.65,
+        "summary": "Options market shows mild bullish bias with put/call ratio below 1.0.",
+        "metrics": {"put_call_ratio": 0.72, "iv": 0.22},
+        "strengths": ["Bullish put/call ratio"],
+        "weaknesses": ["Low implied volatility suggests limited upside expected"],
+        "sources": ["Tradier Options API"]
+      },
+      "llm_calls": []
+    },
+    {
+      "agent_name": "social_sentiment",
+      "tool_calls": [
+        {
+          "tool": "get_social_sentiment",
+          "input": {"ticker": "AAPL"},
+          "output": {"stocktwits_sentiment": 0.62, "reddit_mentions": 234, "news_sentiment": 0.55}
+        }
+      ],
+      "output": {
+        "score": 0.20,
+        "confidence": 0.50,
+        "summary": "Moderately positive social sentiment with steady retail interest.",
+        "metrics": {"stocktwits_bulls": 0.62, "reddit_mentions": 234},
+        "strengths": ["Consistent positive retail sentiment"],
+        "weaknesses": ["Social sentiment is lagging indicator"],
+        "sources": ["StockTwits API", "Reddit"]
+      },
+      "llm_calls": []
+    },
+    {
+      "agent_name": "analyst_ratings",
+      "tool_calls": [
+        {
+          "tool": "get_analyst_ratings",
+          "input": {"ticker": "AAPL"},
+          "output": {"consensus": "Overweight", "avg_target": 195.0, "buy_count": 28, "hold_count": 8, "sell_count": 2}
+        }
+      ],
+      "output": {
+        "score": 0.45,
+        "confidence": 0.80,
+        "summary": "Strong analyst consensus with Overweight rating and $195 average price target.",
+        "metrics": {"consensus": "Overweight", "target_price": 195.0, "upside_pct": 9.2},
+        "strengths": ["28 Buy ratings vs 2 Sell", "Price target implies 9% upside"],
+        "weaknesses": ["Some targets may not reflect recent data"],
+        "sources": ["FMP Analyst Ratings API"]
+      },
+      "llm_calls": []
+    }
+  ],
+  "synthesis": {
+    "overall_score": 0.42,
+    "recommendation": "BUY",
+    "confidence": 0.72,
+    "financial_score": 0.33,
+    "technical_score": 0.22,
+    "sentiment_score": 0.37,
+    "risk_score": 0.06,
+    "agent_scores": {
+      "financial_analyst": 0.35,
+      "technical_analyst": 0.25,
+      "news_sentiment": 0.40,
+      "risk_assessment": -0.15,
+      "competitive_analysis": 0.50,
+      "insider_activity": -0.10,
+      "options_analysis": 0.15,
+      "social_sentiment": 0.20,
+      "earnings_analysis": 0.30,
+      "analyst_ratings": 0.45
+    }
+  }
+}

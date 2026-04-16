@@ -10,6 +10,8 @@ from config.settings import get_settings
 from src.tools.financial_tools import FINANCIAL_TOOLS, execute_tool
 from src.models.structured_outputs import AgentOutput
 from src.agents.tracing import TracingManager
+from src.utils.galileo_setup import log_llm_call, log_agent_output
+from src.guardrails.galileo_guardrails import validate_agent_output
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +66,19 @@ class BaseAgent:
                          "output_tokens": response.usage.output_tokens},
                     )
 
+                # Log to Galileo
+                response_text = next(
+                    (b.text for b in response.content if hasattr(b, "text")), ""
+                )
+                log_llm_call(
+                    model=settings.claude_model,
+                    prompt=str(messages)[:10000],
+                    response=response_text[:5000],
+                    tokens_in=response.usage.input_tokens,
+                    tokens_out=response.usage.output_tokens,
+                    metadata={"agent": self.AGENT_NAME, "ticker": ticker, "iteration": iteration},
+                )
+
                 if response.stop_reason == "tool_use":
                     tool_blocks = [b for b in response.content if b.type == "tool_use"]
                     messages.append({"role": "assistant", "content": response.content})
@@ -93,12 +108,38 @@ class BaseAgent:
                     output = self._try_parse_or_retry(
                         client, settings, messages, tools, text, ticker
                     )
+
+                    # Galileo: Log output and run validations
+                    galileo_result = log_agent_output(
+                        agent_name=self.AGENT_NAME,
+                        ticker=ticker,
+                        score=output.score,
+                        confidence=output.confidence,
+                        summary=output.summary,
+                        sources=output.sources,
+                        rag_context=rag_context,
+                    )
+
+                    # Warn if hallucination detected
+                    if not galileo_result.get("is_grounded", True):
+                        logger.warning(
+                            f"{self.AGENT_NAME}: Possible hallucination detected "
+                            f"(score: {galileo_result.get('hallucination_score', 0):.0%})"
+                        )
+
+                    # Warn if PII detected
+                    if galileo_result.get("pii_detected"):
+                        logger.warning(
+                            f"{self.AGENT_NAME}: PII detected: {galileo_result['pii_detected']}"
+                        )
+
                     if tracer and agent_span:
                         tracer.log_agent_score(agent_span, output)
                         agent_span.update(output={
                             "score": output.score,
                             "confidence": output.confidence,
                             "summary": output.summary,
+                            "galileo_grounded": galileo_result.get("is_grounded", True),
                         })
                         agent_span.end()
                     return output

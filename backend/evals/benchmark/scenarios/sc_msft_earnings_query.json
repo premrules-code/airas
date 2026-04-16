@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "sc_msft_how_are_microsofts_earn_a1b2c3d4",
+  "ticker": "MSFT",
+  "query": "How are Microsoft's earnings trending?",
+  "recorded_at": "2026-04-14T10:30:00Z",
+  "routing": {
+    "mode": "focused",
+    "active_agents": ["financial_analyst", "earnings_analysis"],
+    "categories": ["financial"],
+    "acceptable_agent_sets": [
+      ["earnings_analysis", "financial_analyst"],
+      ["competitive_analysis", "earnings_analysis", "financial_analyst", "risk_assessment"]
+    ]
+  },
+  "rag_context": {
+    "financial_analyst": "Microsoft's total revenue for FY2024 was $245.1 billion, up 16% YoY. Cloud revenue (Azure + other) grew 29%. Operating income increased 24% to $109.4 billion.",
+    "earnings_analysis": "Microsoft EPS for FY2024 was $11.86, up 22% from $9.72 in FY2023. Intelligent Cloud segment revenue grew 20% to $96.0 billion."
+  },
+  "agent_executions": [
+    {
+      "agent_name": "financial_analyst",
+      "tool_calls": [
+        {
+          "tool": "get_stock_price",
+          "input": {"ticker": "MSFT"},
+          "output": {"price": 415.20, "change_pct": 0.8, "volume": 22000000}
+        },
+        {
+          "tool": "calculate_financial_ratio",
+          "input": {"ticker": "MSFT", "ratio_type": "pe_ratio"},
+          "output": {"value": 35.0, "interpretation": "Premium valuation, supported by growth"}
+        }
+      ],
+      "output": {
+        "score": 0.55,
+        "confidence": 0.90,
+        "summary": "Microsoft shows exceptional financial strength with 16% revenue growth and 24% operating income growth.",
+        "metrics": {"pe_ratio": 35.0, "revenue_growth": 0.16, "operating_margin": 0.447},
+        "strengths": ["Strong revenue growth", "Cloud momentum", "Margin expansion"],
+        "weaknesses": ["Premium valuation", "Antitrust scrutiny"],
+        "sources": ["SEC 10-K FY2024", "FMP API"]
+      },
+      "llm_calls": []
+    },
+    {
+      "agent_name": "earnings_analysis",
+      "tool_calls": [],
+      "output": {
+        "score": 0.60,
+        "confidence": 0.88,
+        "summary": "Earnings trajectory is excellent: EPS up 22% YoY driven by cloud and AI monetization.",
+        "metrics": {"eps": 11.86, "eps_growth": 0.22, "cloud_revenue_growth": 0.29},
+        "strengths": ["22% EPS growth", "Azure growth accelerating", "AI revenue starting"],
+        "weaknesses": ["High expectations priced in", "Capex increasing for AI infrastructure"],
+        "sources": ["RAG: SEC 10-K Earnings"]
+      },
+      "llm_calls": []
+    }
+  ],
+  "synthesis": {
+    "overall_score": 0.57,
+    "recommendation": "BUY",
+    "confidence": 0.89,
+    "financial_score": 0.57,
+    "technical_score": 0.0,
+    "sentiment_score": 0.0,
+    "risk_score": 0.0,
+    "agent_scores": {
+      "financial_analyst": 0.55,
+      "earnings_analysis": 0.60
+    }
+  }
+}

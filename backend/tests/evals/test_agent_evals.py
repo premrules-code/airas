@@ -133,7 +133,7 @@ class TestAgentToolConfig:
     def test_rag_agents_have_queries(self, agent_name):
         cls = AGENT_MAP[agent_name]
         instance = cls()
-        assert len(instance.RAG_QUERIES) > 0, f"{agent_name} should have RAG queries"
+        assert len(instance.w) > 0, f"{agent_name} should have RAG queries"
 
     @pytest.mark.parametrize("agent_name", sorted(AGENTS_WITHOUT_RAG))
     def test_non_rag_agents_empty_queries(self, agent_name):

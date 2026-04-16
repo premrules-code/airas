@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "sc_tsla_what_are_the_biggest_r_f8c1d2e3",
+  "ticker": "TSLA",
+  "query": "What are the biggest risks for Tesla?",
+  "recorded_at": "2026-04-14T10:15:00Z",
+  "routing": {
+    "mode": "focused",
+    "active_agents": ["risk_assessment", "competitive_analysis"],
+    "categories": ["risk"],
+    "acceptable_agent_sets": [
+      ["competitive_analysis", "risk_assessment"],
+      ["competitive_analysis", "financial_analyst", "risk_assessment"],
+      ["earnings_analysis", "financial_analyst", "competitive_analysis", "risk_assessment"]
+    ]
+  },
+  "rag_context": {
+    "risk_assessment": "Tesla's risk factors include: dependency on government incentives, execution risk on Full Self-Driving, intense competition from legacy automakers, raw material cost volatility, Elon Musk key person risk, regulatory risks across markets."
+  },
+  "agent_executions": [
+    {
+      "agent_name": "risk_assessment",
+      "tool_calls": [
+        {
+          "tool": "get_stock_price",
+          "input": {"ticker": "TSLA"},
+          "output": {"price": 245.80, "change_pct": -2.3, "volume": 98000000}
+        },
+        {
+          "tool": "calculate_financial_ratio",
+          "input": {"ticker": "TSLA", "ratio_type": "debt_to_equity"},
+          "output": {"value": 0.08, "interpretation": "Very low leverage"}
+        }
+      ],
+      "output": {
+        "score": -0.45,
+        "confidence": 0.85,
+        "summary": "Elevated risk profile: FSD execution risk, EV competition intensifying, key-person dependency on Musk.",
+        "metrics": {"beta": 2.05, "debt_to_equity": 0.08, "max_drawdown_1y": -0.42},
+        "strengths": ["Minimal debt", "Cash position strong"],
+        "weaknesses": ["FSD still not fully autonomous", "EV margin compression", "Musk distraction risk"],
+        "sources": ["SEC 10-K Risk Factors", "FMP API"]
+      },
+      "llm_calls": []
+    },
+    {
+      "agent_name": "competitive_analysis",
+      "tool_calls": [],
+      "output": {
+        "score": -0.20,
+        "confidence": 0.70,
+        "summary": "Tesla faces growing competition from BYD, legacy automakers, and Rivian in key segments.",
+        "metrics": {"us_ev_market_share": 0.55, "china_ev_market_share": 0.08},
+        "strengths": ["Supercharger network moat", "Brand recognition"],
+        "weaknesses": ["China market share declining", "BYD price competition", "Legacy EV entries"],
+        "sources": ["RAG: SEC 10-K competitive landscape"]
+      },
+      "llm_calls": []
+    }
+  ],
+  "synthesis": {
+    "overall_score": -0.35,
+    "recommendation": "SELL",
+    "confidence": 0.78,
+    "financial_score": 0.0,
+    "technical_score": 0.0,
+    "sentiment_score": 0.0,
+    "risk_score": -0.35,
+    "agent_scores": {
+      "risk_assessment": -0.45,
+      "competitive_analysis": -0.20
+    }
+  }
+}

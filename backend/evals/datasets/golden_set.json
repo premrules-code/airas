@@ -1,0 +1,132 @@
+{
+  "version": "1.0",
+  "description": "Golden dataset for RAG evaluation - queries with ground truth answers and relevant chunks",
+  "created_at": "2024-02-19",
+  "queries": [
+    {
+      "id": "q001",
+      "ticker": "AAPL",
+      "query": "What was Apple's total revenue in FY2023?",
+      "ground_truth_answer": "Apple reported total net sales of $383.3 billion ($383,285 million) for fiscal year 2023.",
+      "ground_truth_chunks": [],
+      "category": "financial_metrics",
+      "difficulty": "easy",
+      "requires_calculation": false,
+      "notes": "Direct lookup from income statement"
+    },
+    {
+      "id": "q002",
+      "ticker": "AAPL",
+      "query": "What are Apple's main risk factors disclosed in their 10-K?",
+      "ground_truth_answer": "Apple disclosed risks including: macroeconomic conditions, supply chain disruptions, competition, regulatory scrutiny, cybersecurity threats, and dependence on third-party developers.",
+      "ground_truth_chunks": [],
+      "category": "risk_factors",
+      "difficulty": "medium",
+      "requires_calculation": false,
+      "notes": "Item 1A Risk Factors section"
+    },
+    {
+      "id": "q003",
+      "ticker": "AAPL",
+      "query": "How much cash and cash equivalents did Apple have at the end of FY2023?",
+      "ground_truth_answer": "Apple had $29.965 billion in cash and cash equivalents as of September 30, 2023.",
+      "ground_truth_chunks": [],
+      "category": "financial_metrics",
+      "difficulty": "easy",
+      "requires_calculation": false,
+      "notes": "Balance sheet item"
+    },
+    {
+      "id": "q004",
+      "ticker": "AAPL",
+      "query": "What was Apple's gross margin percentage in FY2023?",
+      "ground_truth_answer": "Apple's gross margin was 44.1% in fiscal year 2023 (gross profit of $169.1 billion on net sales of $383.3 billion).",
+      "ground_truth_chunks": [],
+      "category": "financial_metrics",
+      "difficulty": "medium",
+      "requires_calculation": true,
+      "notes": "May need calculation from gross profit / revenue"
+    },
+    {
+      "id": "q005",
+      "ticker": "AAPL",
+      "query": "How much did Apple spend on research and development in FY2023?",
+      "ground_truth_answer": "Apple spent $29.915 billion on research and development in fiscal year 2023.",
+      "ground_truth_chunks": [],
+      "category": "financial_metrics",
+      "difficulty": "easy",
+      "requires_calculation": false,
+      "notes": "Income statement operating expenses"
+    },
+    {
+      "id": "q006",
+      "ticker": "AAPL",
+      "query": "What is Apple's total long-term debt?",
+      "ground_truth_answer": "Apple had $95.281 billion in long-term debt as of September 30, 2023.",
+      "ground_truth_chunks": [],
+      "category": "financial_metrics",
+      "difficulty": "easy",
+      "requires_calculation": false,
+      "notes": "Balance sheet liability"
+    },
+    {
+      "id": "q007",
+      "ticker": "AAPL",
+      "query": "What geographic regions does Apple report revenue for?",
+      "ground_truth_answer": "Apple reports revenue for: Americas, Europe, Greater China, Japan, and Rest of Asia Pacific.",
+      "ground_truth_chunks": [],
+      "category": "business_segments",
+      "difficulty": "easy",
+      "requires_calculation": false,
+      "notes": "Geographic segment disclosure"
+    },
+    {
+      "id": "q008",
+      "ticker": "AAPL",
+      "query": "How much revenue did Apple generate from Services in FY2023?",
+      "ground_truth_answer": "Apple's Services segment generated $85.2 billion in revenue in fiscal year 2023.",
+      "ground_truth_chunks": [],
+      "category": "business_segments",
+      "difficulty": "easy",
+      "requires_calculation": false,
+      "notes": "Segment revenue breakdown"
+    },
+    {
+      "id": "q009",
+      "ticker": "AAPL",
+      "query": "What was Apple's effective tax rate in FY2023?",
+      "ground_truth_answer": "Apple's effective tax rate was approximately 14.7% in fiscal year 2023.",
+      "ground_truth_chunks": [],
+      "category": "financial_metrics",
+      "difficulty": "medium",
+      "requires_calculation": true,
+      "notes": "Tax provision / pre-tax income"
+    },
+    {
+      "id": "q010",
+      "ticker": "AAPL",
+      "query": "How much did Apple return to shareholders through dividends and buybacks in FY2023?",
+      "ground_truth_answer": "Apple returned approximately $77 billion to shareholders in FY2023 through dividends ($15 billion) and share repurchases ($62 billion).",
+      "ground_truth_chunks": [],
+      "category": "capital_allocation",
+      "difficulty": "medium",
+      "requires_calculation": true,
+      "notes": "Cash flow statement financing activities"
+    }
+  ],
+  "metadata": {
+    "total_queries": 10,
+    "tickers": ["AAPL"],
+    "categories": {
+      "financial_metrics": 6,
+      "risk_factors": 1,
+      "business_segments": 2,
+      "capital_allocation": 1
+    },
+    "difficulty_distribution": {
+      "easy": 6,
+      "medium": 4,
+      "hard": 0
+    }
+  }
+}
